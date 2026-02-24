@@ -16,14 +16,33 @@ import Dexie from 'dexie'
  *   ++id          – auto-increment PK (single-player: id=1)
  *                   (no additional indexes needed; always fetched by id=1)
  *
- * Bump db.version() whenever the schema or data shape changes. Existing data
- * is migrated inside the version().upgrade() callback.
+ * Schema v2
+ * ---------
+ * players gains:
+ *   combo            – current combo multiplier (1.0–1.4)
+ *   lastCompleteAt   – ISO timestamp of last task completion (for combo decay)
+ *   dailyGoal        – target tasks per day (default 3)
+ *   achievementsUnlocked – array of achievement ids
+ *   rewardsUnlocked  – array of reward ids
  */
 const db = new Dexie('taskquest')
 
 db.version(1).stores({
   tasks: '++id, dueDate, status, createdAt, [dueDate+status]',
   players: '++id',
+})
+
+db.version(2).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status]',
+  players: '++id',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.combo === undefined) player.combo = 1.0
+    if (player.lastCompleteAt === undefined) player.lastCompleteAt = null
+    if (player.dailyGoal === undefined) player.dailyGoal = 3
+    if (player.achievementsUnlocked === undefined) player.achievementsUnlocked = []
+    if (player.rewardsUnlocked === undefined) player.rewardsUnlocked = []
+  })
 })
 
 export default db
