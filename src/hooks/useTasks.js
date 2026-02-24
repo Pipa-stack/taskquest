@@ -8,28 +8,31 @@ import { calcCombo, applyCombo } from '../domain/combo.js'
 import { checkNewAchievements, getAchievement } from '../domain/achievements.js'
 
 /**
- * React hook that exposes today's tasks and mutation helpers.
+ * React hook that exposes tasks for a given day and mutation helpers.
+ *
+ * @param {string} [dateKey]  YYYY-MM-DD key for the day to show.
+ *                            Defaults to todayKey() when omitted.
  *
  * Returns:
- *  - tasks        – live-reactive array of today's tasks (pending first, then done)
- *  - addTask      – create a new task for today; auto-detects clones
+ *  - tasks        – live-reactive array of tasks for dateKey (pending first, then done)
+ *  - addTask      – create a new task for dateKey; auto-detects clones
  *  - completeTask – marks a task done, applies combo XP, checks achievements
  *                   Returns Promise<{ xpEarned, newAchievements }>
  */
-export function useTasks() {
-  const today = todayKey()
+export function useTasks(dateKey) {
+  const resolvedDateKey = dateKey ?? todayKey()
 
   const tasks = useLiveQuery(
     () =>
       db.tasks
         .where('dueDate')
-        .equals(today)
+        .equals(resolvedDateKey)
         .sortBy('createdAt'),
-    [today]
+    [resolvedDateKey]
   )
 
   /**
-   * Creates a new task for today. Detects clones (same normalised title)
+   * Creates a new task for resolvedDateKey. Detects clones (same normalised title)
    * and marks them with isClone=true so they earn 0 XP on completion.
    */
   const addTask = useCallback(
@@ -37,23 +40,26 @@ export function useTasks() {
       const trimmed = title.trim()
       if (!trimmed) return
 
-      const existing = await db.tasks.where('dueDate').equals(today).toArray()
-      const clone = isClone({ title: trimmed, dueDate: today }, existing)
+      const existing = await db.tasks.where('dueDate').equals(resolvedDateKey).toArray()
+      const clone = isClone({ title: trimmed, dueDate: resolvedDateKey }, existing)
 
       await db.tasks.add({
         title: trimmed,
-        dueDate: today,
+        dueDate: resolvedDateKey,
         status: 'pending',
         createdAt: new Date().toISOString(),
         isClone: clone,
       })
     },
-    [today]
+    [resolvedDateKey]
   )
 
   /**
    * Marks a task as done, awards XP with combo multiplier, updates streak,
    * and checks for newly unlocked achievements.
+   *
+   * Daily-goal / mission counting always uses the real today, not the
+   * selected day, so navigating to another day never breaks missions.
    *
    * Idempotent: silently no-ops if the task is already done.
    * @returns {Promise<{ xpEarned: number, newAchievements: string[] }>}
@@ -64,6 +70,9 @@ export function useTasks() {
 
     const baseXp = taskXpReward(task)
     const now = new Date()
+    // Achievements / daily-goal always track the real today, regardless of which
+    // day the user is currently viewing.
+    const realToday = todayKey()
     let xpEarned = 0
     let newAchievements = []
 
@@ -94,10 +103,10 @@ export function useTasks() {
 
       const streakUpdate = calcUpdatedStreak(player, now)
 
-      // Count today's completed tasks (after this one)
+      // Count today's completed tasks (after this one) — always uses real today
       const todayDone = await db.tasks
         .where('[dueDate+status]')
-        .equals([today, 'done'])
+        .equals([realToday, 'done'])
         .count()
       const todayTasksCount = todayDone + 1  // +1 for the task we just completed
 
@@ -134,7 +143,7 @@ export function useTasks() {
     })
 
     return { xpEarned, newAchievements }
-  }, [today])
+  }, [])  // completeTask has no dependency on dateKey; it always uses real today internally
 
   return { tasks: tasks ?? [], addTask, completeTask }
 }
