@@ -452,3 +452,296 @@ ul {
   font-weight: 600;
   color: #8b8bba;
 }
+
+/* ── Tabs navigation ──────────────────────────────────────────────── */
+.tabs-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  background: #16161f;
+  border: 1px solid #2a2a3e;
+  border-radius: 12px;
+  padding: 0.3rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #5a5a7a;
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.04em;
+}
+
+.tab-btn:hover:not(.tab-active) {
+  background: #1e1e2e;
+  color: #8a8ab0;
+}
+
+.tab-active {
+  background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(96,165,250,0.2));
+  color: #e2e2e7;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ── Combo badge ──────────────────────────────────────────────────── */
+.combo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.65rem;
+  margin-bottom: 0.75rem;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.15));
+  border: 1px solid rgba(251,191,36,0.35);
+  color: #fbbf24;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Daily goal ───────────────────────────────────────────────────── */
+.daily-goal {
+  margin-top: 1rem;
+}
+
+.daily-goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.daily-goal-label {
+  font-size: 0.72rem;
+  color: #5a5a7a;
+  letter-spacing: 0.04em;
+}
+
+.goal-met {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.goal-select {
+  background: #22223a;
+  border: 1px solid #3a3a5e;
+  border-radius: 5px;
+  color: #e2e2e7;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.35rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.goal-select:focus {
+  border-color: #a78bfa;
+}
+
+.daily-goal-bar-wrap {
+  height: 6px;
+  background: #22223a;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.daily-goal-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa, #34d399);
+  border-radius: 99px;
+  min-width: 4px;
+}
+
+.goal-bar-done {
+  background: linear-gradient(90deg, #4ade80, #22d3ee);
+}
+
+/* ── Section heading (Rewards / Stats) ───────────────────────────── */
+.section-heading {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #e2e2e7;
+  margin-bottom: 0.3rem;
+}
+
+.section-sub {
+  font-size: 0.82rem;
+  color: #5a5a7a;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Rewards shop ─────────────────────────────────────────────────── */
+.rewards-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.reward-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #16161f;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  transition: border-color 0.15s;
+}
+
+.reward-item:hover {
+  border-color: #3a3a5e;
+}
+
+.reward-unlocked {
+  opacity: 0.55;
+  border-color: #1e1e2e;
+}
+
+.reward-locked {
+  opacity: 0.6;
+}
+
+.reward-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.reward-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #e2e2e7;
+}
+
+.reward-desc {
+  font-size: 0.75rem;
+  color: #5a5a7a;
+}
+
+.reward-action {
+  flex-shrink: 0;
+}
+
+.btn-reward {
+  padding: 0.35rem 0.8rem;
+  background: linear-gradient(135deg, rgba(167,139,250,0.15), rgba(96,165,250,0.15));
+  border: 1.5px solid #a78bfa;
+  border-radius: 7px;
+  color: #a78bfa;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.btn-reward:hover:not(:disabled) {
+  background: rgba(167,139,250,0.25);
+}
+
+.btn-reward:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: #4a4a6a;
+  color: #4a4a6a;
+}
+
+.reward-done {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+/* ── Stats tab ────────────────────────────────────────────────────── */
+.stats-loading {
+  padding: 2rem;
+  color: #5a5a7a;
+  text-align: center;
+  font-size: 0.88rem;
+}
+
+.stats-summary {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 80px;
+  background: #16161f;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-card-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #5a5a7a;
+}
+
+.stat-card-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #e2e2e7;
+  line-height: 1;
+}
+
+.stats-table-heading {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #4a4a6a;
+  margin-bottom: 0.75rem;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.stats-table th {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4a4a6a;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.stats-table td {
+  padding: 0.55rem 0.75rem;
+  color: #8a8ab0;
+  border-bottom: 1px solid #1e1e2e;
+}
+
+.stats-today td {
+  color: #e2e2e7;
+  font-weight: 600;
+}
+
+.stats-today td:first-child::after {
+  content: ' ·';
+  color: #a78bfa;
+}
