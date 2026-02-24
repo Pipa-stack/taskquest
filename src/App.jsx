@@ -1,34 +1,32 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useTasks } from './hooks/useTasks.js'
+import { usePlayer } from './hooks/usePlayer.js'
+import TaskForm from './components/TaskForm.jsx'
+import TaskList from './components/TaskList.jsx'
+import PlayerStats from './components/PlayerStats.jsx'
+import { todayKey } from './domain/dateKey.js'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { tasks, addTask, completeTask } = useTasks()
+  const player = usePlayer()
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="app">
+      <header className="app-header">
+        <h1 className="app-title">TaskQuest</h1>
+        <p className="app-date">Today · {todayKey()}</p>
+      </header>
+      <PlayerStats
+        xp={player.xp}
+        level={player.level}
+        streak={player.streak}
+        xpToNext={player.xpToNext}
+      />
+      <main className="app-main">
+        <TaskForm onAdd={addTask} />
+        <TaskList tasks={tasks} onComplete={completeTask} />
+      </main>
+    </div>
   )
 }
 
