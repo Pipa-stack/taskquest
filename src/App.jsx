@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks } from './hooks/useTasks.js'
 import { usePlayer } from './hooks/usePlayer.js'
+import { useQuests } from './hooks/useQuests.js'
 import TaskForm from './components/TaskForm.jsx'
 import TaskList from './components/TaskList.jsx'
 import PlayerStats from './components/PlayerStats.jsx'
@@ -9,6 +10,7 @@ import LevelUpOverlay from './components/LevelUpOverlay.jsx'
 import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
+import DailyQuests from './components/DailyQuests.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -40,6 +42,10 @@ function App() {
   const dismissNotification = useCallback((id) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
   }, [])
+
+  const { quests, questsLoading, weeklyProgress, weeklyRewardClaimed } = useQuests({
+    onReward: addNotification,
+  })
 
   const handleComplete = useCallback(
     async (taskId) => {
@@ -104,6 +110,7 @@ function App() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
+                <DailyQuests quests={quests} questsLoading={questsLoading} />
                 <TaskForm onAdd={addTask} />
                 <TaskList tasks={tasks} onComplete={handleComplete} />
               </motion.div>
@@ -133,7 +140,11 @@ function App() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                <StatsTab streak={player.streak} />
+                <StatsTab
+                  streak={player.streak}
+                  weeklyProgress={weeklyProgress}
+                  weeklyRewardClaimed={weeklyRewardClaimed}
+                />
               </motion.div>
             )}
           </AnimatePresence>

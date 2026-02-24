@@ -24,6 +24,16 @@ import Dexie from 'dexie'
  *   dailyGoal        – target tasks per day (default 3)
  *   achievementsUnlocked – array of achievement ids
  *   rewardsUnlocked  – array of reward ids
+ *
+ * Schema v3
+ * ---------
+ * dailyQuests
+ *   dateKey  – YYYY-MM-DD (primary key); the day these quests belong to
+ *   quests   – JSON array of quest objects (id, type, title, xpReward, target, rewardClaimed)
+ *
+ * weeklyChallenge
+ *   weekKey        – "week-YYYY-MM-DD" of Monday (primary key)
+ *   rewardClaimed  – boolean; true once XP + badge have been awarded
  */
 const db = new Dexie('taskquest')
 
@@ -43,6 +53,13 @@ db.version(2).stores({
     if (player.achievementsUnlocked === undefined) player.achievementsUnlocked = []
     if (player.rewardsUnlocked === undefined) player.rewardsUnlocked = []
   })
+})
+
+db.version(3).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status]',
+  players: '++id',
+  dailyQuests: 'dateKey',
+  weeklyChallenge: 'weekKey',
 })
 
 export default db

@@ -2,11 +2,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../db/db.js'
 import { aggregateLast7Days, getTodayStats } from '../domain/stats.js'
 import { todayKey } from '../domain/dateKey.js'
+import WeeklyChallenge from './WeeklyChallenge.jsx'
 
 /**
- * Stats tab – shows XP today, tasks today, streak, and a 7-day table.
+ * Stats tab – shows XP today, tasks today, streak, a 7-day table,
+ * and the weekly challenge block.
  */
-export default function StatsTab({ streak }) {
+export default function StatsTab({ streak, weeklyProgress, weeklyRewardClaimed }) {
   const today = todayKey()
 
   const allTasks = useLiveQuery(
@@ -39,6 +41,11 @@ export default function StatsTab({ streak }) {
           <span className="stat-card-value">{streak} 🔥</span>
         </div>
       </div>
+
+      <WeeklyChallenge
+        weeklyProgress={weeklyProgress}
+        weeklyRewardClaimed={weeklyRewardClaimed}
+      />
 
       <h3 className="stats-table-heading">Últimos 7 días</h3>
       <table className="stats-table">
