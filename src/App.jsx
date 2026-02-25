@@ -10,6 +10,7 @@ import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
+import AuthPanel from './components/AuthPanel.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -17,7 +18,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Perfil']
 
 // Persist the selected date across reloads (falls back to today if stale)
 function loadSelectedDate() {
@@ -177,6 +178,18 @@ function App() {
                 transition={{ duration: 0.18 }}
               >
                 <StatsTab streak={player.streak} />
+              </motion.div>
+            )}
+
+            {activeTab === 'Perfil' && (
+              <motion.div
+                key="perfil"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <AuthPanel />
               </motion.div>
             )}
           </AnimatePresence>
