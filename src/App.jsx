@@ -9,6 +9,7 @@ import LevelUpOverlay from './components/LevelUpOverlay.jsx'
 import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
+import MiniCalendar from './components/MiniCalendar.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -18,8 +19,25 @@ let notifIdCounter = 0
 
 const TABS = ['Tasks', 'Rewards', 'Stats']
 
+// Persist the selected date across reloads (falls back to today if stale)
+function loadSelectedDate() {
+  try {
+    const stored = localStorage.getItem('selectedDateKey')
+    // Validate format before trusting it
+    if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored
+  } catch (_) {
+    // localStorage unavailable (e.g. private browsing restrictions)
+  }
+  return todayKey()
+}
+
 function App() {
-  const { tasks, addTask, completeTask } = useTasks()
+  const today = todayKey()
+
+  const [selectedDateKey, setSelectedDateKey] = useState(loadSelectedDate)
+  const [calendarOpen, setCalendarOpen] = useState(true)
+
+  const { tasks, addTask, completeTask } = useTasks(selectedDateKey)
   const player = usePlayer()
 
   const [activeTab, setActiveTab] = useState('Tasks')
@@ -31,6 +49,13 @@ function App() {
   useEffect(() => {
     playerXpRef.current = player.xp
   }, [player.xp])
+
+  const handleSelectDateKey = useCallback((dateKey) => {
+    setSelectedDateKey(dateKey)
+    try {
+      localStorage.setItem('selectedDateKey', dateKey)
+    } catch (_) {}
+  }, [])
 
   const addNotification = useCallback((message) => {
     const id = ++notifIdCounter
@@ -74,7 +99,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">TaskQuest</h1>
-        <p className="app-date">Hoy · {todayKey()}</p>
+        <p className="app-date">Hoy · {today}</p>
       </header>
 
       {/* Tab navigation */}
@@ -104,6 +129,24 @@ function App() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
+                {/* Mobile toggle for calendar */}
+                <button
+                  className="mc-toggle-btn"
+                  onClick={() => setCalendarOpen((o) => !o)}
+                  type="button"
+                >
+                  📅 Calendario {calendarOpen ? '▲' : '▼'}
+                </button>
+
+                {/* Calendar wrapper: always visible on desktop, togglable on mobile */}
+                <div className={`mc-wrapper${calendarOpen ? ' mc-open' : ''}`}>
+                  <MiniCalendar
+                    selectedDateKey={selectedDateKey}
+                    todayKey={today}
+                    onSelectDateKey={handleSelectDateKey}
+                  />
+                </div>
+
                 <TaskForm onAdd={addTask} />
                 <TaskList tasks={tasks} onComplete={handleComplete} />
               </motion.div>

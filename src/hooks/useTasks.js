@@ -8,28 +8,32 @@ import { calcCombo, applyCombo } from '../domain/combo.js'
 import { checkNewAchievements, getAchievement } from '../domain/achievements.js'
 
 /**
- * React hook that exposes today's tasks and mutation helpers.
+ * React hook that exposes tasks for a given date and mutation helpers.
+ *
+ * @param {string} [selectedDate] - YYYY-MM-DD date to show tasks for.
+ *   Defaults to today. Streak / achievement logic always uses the real today.
  *
  * Returns:
- *  - tasks        – live-reactive array of today's tasks (pending first, then done)
- *  - addTask      – create a new task for today; auto-detects clones
+ *  - tasks        – live-reactive array of tasks for `selectedDate`
+ *  - addTask      – create a new task for `selectedDate`; auto-detects clones
  *  - completeTask – marks a task done, applies combo XP, checks achievements
  *                   Returns Promise<{ xpEarned, newAchievements }>
  */
-export function useTasks() {
+export function useTasks(selectedDate) {
   const today = todayKey()
+  const dateKey = selectedDate || today
 
   const tasks = useLiveQuery(
     () =>
       db.tasks
         .where('dueDate')
-        .equals(today)
+        .equals(dateKey)
         .sortBy('createdAt'),
-    [today]
+    [dateKey]
   )
 
   /**
-   * Creates a new task for today. Detects clones (same normalised title)
+   * Creates a new task for `dateKey`. Detects clones (same normalised title)
    * and marks them with isClone=true so they earn 0 XP on completion.
    */
   const addTask = useCallback(
@@ -37,18 +41,18 @@ export function useTasks() {
       const trimmed = title.trim()
       if (!trimmed) return
 
-      const existing = await db.tasks.where('dueDate').equals(today).toArray()
-      const clone = isClone({ title: trimmed, dueDate: today }, existing)
+      const existing = await db.tasks.where('dueDate').equals(dateKey).toArray()
+      const clone = isClone({ title: trimmed, dueDate: dateKey }, existing)
 
       await db.tasks.add({
         title: trimmed,
-        dueDate: today,
+        dueDate: dateKey,
         status: 'pending',
         createdAt: new Date().toISOString(),
         isClone: clone,
       })
     },
-    [today]
+    [dateKey]
   )
 
   /**
@@ -136,5 +140,5 @@ export function useTasks() {
     return { xpEarned, newAchievements }
   }, [today])
 
-  return { tasks: tasks ?? [], addTask, completeTask }
+  return { tasks: tasks ?? [], addTask, completeTask, dateKey }
 }
