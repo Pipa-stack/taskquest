@@ -3,12 +3,13 @@ import { XP_PER_LEVEL } from '../domain/gamification.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
  * Displays player level, XP progress bar (animated), daily streak,
  * daily goal progress, and combo badge.
  */
-export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal }) {
+export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
@@ -28,13 +29,20 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
 
   const handleGoalChange = async (e) => {
     const newGoal = Number(e.target.value)
-    const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
-    await db.players.put({ ...player, id: 1, dailyGoal: newGoal })
+    await playerRepository.setDailyGoal(newGoal)
   }
 
   return (
     <div className="player-stats">
-      <h2 className="stats-title">HUD</h2>
+      <h2 className="stats-title">
+        HUD
+        {syncStatus === 'pending' && (
+          <span className="player-sync-icon" title="Sincronización pendiente"> ⏳</span>
+        )}
+        {syncStatus === 'error' && (
+          <span className="player-sync-icon" title="Error de sincronización"> ⚠️</span>
+        )}
+      </h2>
 
       {/* Combo badge */}
       {showCombo && (

@@ -1,0 +1,134 @@
+import db from '../db/db.js'
+
+const PLAYER_LAST_PULLED_KEY = 'taskquest.playerLastPulledAt'
+const PUSH_BATCH_SIZE = 10
+
+/**
+ * Pure helper: decides whether a remote player_state should overwrite the local one.
+ * Exported for unit testing.
+ *
+ * @param {object|null|undefined} local  – local player record (has `updatedAt` field)
+ * @param {object} remote               – remote player_state row (has `updated_at` field)
+ * @returns {boolean}
+ */
+export function shouldOverwritePlayer(local, remote) {
+  if (!local?.updatedAt) return true
+  return remote.updated_at > local.updatedAt
+}
+
+/**
+ * Pushes pending UPSERT_PLAYER outbox entries to Supabase player_state.
+ * Processes up to PUSH_BATCH_SIZE items ordered by createdAt.
+ *
+ * Remote table: player_state (1 row per user, upserted by user_id)
+ * Synced fields: xp, streak, last_active_date, daily_goal, unlocked_rewards,
+ *                unlocked_characters (empty until PR11), updated_at
+ *
+ * On success: marks outbox item 'sent', marks player.syncStatus='synced'.
+ * On failure: marks outbox item 'failed', increments retryCount, sets player.syncStatus='error'.
+ *
+ * @param {{ supabase: object, userId: string }} params
+ */
+export async function pushPlayerOutbox({ supabase, userId }) {
+  if (!supabase || !userId) return
+
+  const allPending = await db.outbox
+    .where('status')
+    .equals('pending')
+    .filter((item) => item.type === 'UPSERT_PLAYER')
+    .sortBy('createdAt')
+
+  const batch = allPending.slice(0, PUSH_BATCH_SIZE)
+
+  for (const item of batch) {
+    try {
+      const p = item.payload
+
+      const remotePlayer = {
+        user_id: userId,
+        xp: p.xp ?? 0,
+        streak: p.streak ?? 0,
+        last_active_date: p.lastActiveDate ?? null,
+        daily_goal: p.dailyGoal ?? 3,
+        unlocked_rewards: p.rewardsUnlocked ?? [],
+        // PR11: unlocked_characters will be populated when character drops are implemented
+        unlocked_characters: [],
+        updated_at: p.updatedAt,
+      }
+
+      const { error } = await supabase
+        .from('player_state')
+        .upsert(remotePlayer, { onConflict: 'user_id' })
+
+      if (error) throw error
+
+      await db.outbox.update(item.id, { status: 'sent' })
+      await db.players.update(1, { syncStatus: 'synced' })
+    } catch (err) {
+      console.warn('[playerSync] pushPlayerOutbox failed for outbox item', item.id, err)
+      await db.outbox.update(item.id, {
+        status: 'failed',
+        retryCount: (item.retryCount ?? 0) + 1,
+      })
+      try {
+        await db.players.update(1, { syncStatus: 'error' })
+      } catch (_) {}
+    }
+  }
+}
+
+/**
+ * Pulls player_state from Supabase and merges into the local Dexie player record.
+ *
+ * Merge strategy (last-write-wins by updated_at):
+ *  - If remote.updated_at > local.updatedAt → overwrite synced fields.
+ *  - Local-only fields (combo, lastCompleteAt, achievementsUnlocked) are always preserved.
+ *  - If no local player exists → create one from remote data.
+ *
+ * Updates localStorage key "taskquest.playerLastPulledAt" on success.
+ *
+ * @param {{ supabase: object, userId: string }} params
+ */
+export async function pullPlayerRemote({ supabase, userId }) {
+  if (!supabase || !userId) return
+
+  const now = new Date().toISOString()
+
+  try {
+    const { data, error } = await supabase
+      .from('player_state')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (!data) {
+      // No remote player yet — nothing to merge
+      localStorage.setItem(PLAYER_LAST_PULLED_KEY, now)
+      return
+    }
+
+    const local = await db.players.get(1)
+
+    if (shouldOverwritePlayer(local, data)) {
+      // Spread local first to preserve non-synced fields (combo, lastCompleteAt, etc.)
+      const merged = {
+        ...(local ?? {}),
+        id: 1,
+        xp: data.xp ?? 0,
+        streak: data.streak ?? 0,
+        lastActiveDate: data.last_active_date ?? null,
+        dailyGoal: data.daily_goal ?? 3,
+        rewardsUnlocked: data.unlocked_rewards ?? [],
+        updatedAt: data.updated_at,
+        syncStatus: 'synced',
+      }
+      await db.players.put(merged)
+    }
+
+    localStorage.setItem(PLAYER_LAST_PULLED_KEY, now)
+  } catch (err) {
+    console.warn('[playerSync] pullPlayerRemote failed', err)
+  }
+}

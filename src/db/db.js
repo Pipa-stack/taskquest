@@ -38,9 +38,19 @@ import { getDeviceId } from '../lib/deviceId.js'
  *   ++id      – auto-increment
  *   createdAt – ISO timestamp; used for ordering
  *   status    – 'pending' | 'sent' | 'failed'
- *   type      – 'UPSERT_TASK' | 'DELETE_TASK'
- *   payload   – task snapshot object
+ *   type      – 'UPSERT_TASK' | 'DELETE_TASK' | 'UPSERT_PLAYER'
+ *   payload   – task or player snapshot object
  *   retryCount – number of failed attempts
+ *
+ * Schema v4
+ * ---------
+ * players gains:
+ *   updatedAt  – ISO timestamp for sync conflict resolution
+ *   syncStatus – 'pending' | 'synced' | 'error' (offline-first indicator)
+ *
+ * NOTE for PR11: player_state remote table will gain unlocked_characters jsonb
+ * to support Character Drops when completing tasks. The local players table
+ * will also gain an unlockedCharacters field at that point.
  */
 const db = new Dexie('taskquest')
 
@@ -74,6 +84,18 @@ db.version(3).stores({
     if (task.localId === undefined) task.localId = task.id
     if (!task.updatedAt) task.updatedAt = task.createdAt || now
     if (!task.syncStatus) task.syncStatus = 'synced' // existing tasks are considered already synced
+  })
+})
+
+db.version(4).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  const now = new Date().toISOString()
+  return tx.players.toCollection().modify((player) => {
+    if (!player.updatedAt) player.updatedAt = now
+    if (!player.syncStatus) player.syncStatus = 'pending'
   })
 })
 

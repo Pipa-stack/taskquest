@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { REWARDS } from '../domain/rewards.js'
-import db from '../db/db.js'
+import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
  * Rewards shop tab.
@@ -15,19 +15,13 @@ export default function RewardsShop({ xp, rewardsUnlocked, onNotify }) {
       if (busy) return
       setBusy(reward.id)
       try {
-        await db.transaction('rw', [db.players], async () => {
-          const player = (await db.players.get(1)) ?? { id: 1, xp: 0, rewardsUnlocked: [] }
-          const alreadyUnlocked = (player.rewardsUnlocked ?? []).includes(reward.id)
-          if (alreadyUnlocked || player.xp < reward.costXP) return
-
-          await db.players.put({
-            ...player,
-            id: 1,
-            xp: player.xp - reward.costXP,
-            rewardsUnlocked: [...(player.rewardsUnlocked ?? []), reward.id],
-          })
+        const success = await playerRepository.spendXpOnReward({
+          rewardId: reward.id,
+          costXP: reward.costXP,
         })
-        onNotify(`🎁 Recompensa desbloqueada: ${reward.title}`)
+        if (success) {
+          onNotify(`🎁 Recompensa desbloqueada: ${reward.title}`)
+        }
       } finally {
         setBusy(null)
       }
