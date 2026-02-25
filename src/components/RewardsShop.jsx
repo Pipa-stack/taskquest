@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { REWARDS } from '../domain/rewards.js'
-import db from '../db/db.js'
+import * as playerRepository from '../repositories/playerRepository.js'
 
 /**
  * Rewards shop tab.
  * Shows all 10 rewards. Available ones (xp >= cost, not yet unlocked) can be purchased.
+ *
+ * DB access is fully delegated to playerRepository — this component never imports db.
  */
 export default function RewardsShop({ xp, rewardsUnlocked, onNotify }) {
   const [busy, setBusy] = useState(null)
@@ -15,18 +17,7 @@ export default function RewardsShop({ xp, rewardsUnlocked, onNotify }) {
       if (busy) return
       setBusy(reward.id)
       try {
-        await db.transaction('rw', [db.players], async () => {
-          const player = (await db.players.get(1)) ?? { id: 1, xp: 0, rewardsUnlocked: [] }
-          const alreadyUnlocked = (player.rewardsUnlocked ?? []).includes(reward.id)
-          if (alreadyUnlocked || player.xp < reward.costXP) return
-
-          await db.players.put({
-            ...player,
-            id: 1,
-            xp: player.xp - reward.costXP,
-            rewardsUnlocked: [...(player.rewardsUnlocked ?? []), reward.id],
-          })
-        })
+        await playerRepository.spendXp(reward.costXP, reward.id)
         onNotify(`🎁 Recompensa desbloqueada: ${reward.title}`)
       } finally {
         setBusy(null)

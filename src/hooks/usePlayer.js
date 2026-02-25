@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import db from '../db/db.js'
 import { xpToLevel, xpToNextLevel } from '../domain/gamification.js'
+import * as playerRepository from '../repositories/playerRepository.js'
 
 const DEFAULT = {
   xp: 0,
@@ -18,9 +18,12 @@ const DEFAULT = {
 /**
  * Returns live-reactive player stats derived from the single player record (id=1).
  * Falls back to zero-state defaults before the first task is ever completed.
+ *
+ * DB access is fully delegated to playerRepository — this hook never imports db.
+ * Dexie tracks the read inside useLiveQuery and re-renders on any player change.
  */
 export function usePlayer() {
-  const player = useLiveQuery(() => db.players.get(1), [])
+  const player = useLiveQuery(() => playerRepository.getLive(), [])
 
   if (!player) return DEFAULT
 

@@ -1,12 +1,15 @@
 import { motion } from 'framer-motion'
-import { XP_PER_LEVEL } from '../domain/gamification.js'
-import db from '../db/db.js'
-import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { XP_PER_LEVEL } from '../domain/gamification.js'
+import { todayKey } from '../domain/dateKey.js'
+import * as taskRepository from '../repositories/taskRepository.js'
+import * as playerRepository from '../repositories/playerRepository.js'
 
 /**
  * Displays player level, XP progress bar (animated), daily streak,
  * daily goal progress, and combo badge.
+ *
+ * DB access is fully delegated to taskRepository and playerRepository.
  */
 export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
@@ -14,9 +17,9 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
 
   const today = todayKey()
 
-  // Count today's completed tasks live
+  // Count today's completed tasks live via repository
   const todayDone = useLiveQuery(
-    () => db.tasks.where('[dueDate+status]').equals([today, 'done']).count(),
+    () => taskRepository.countByDateAndStatus(today, 'done'),
     [today]
   ) ?? 0
 
@@ -27,9 +30,7 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
   const showCombo = combo > 1.0
 
   const handleGoalChange = async (e) => {
-    const newGoal = Number(e.target.value)
-    const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
-    await db.players.put({ ...player, id: 1, dailyGoal: newGoal })
+    await playerRepository.setDailyGoal(Number(e.target.value))
   }
 
   return (

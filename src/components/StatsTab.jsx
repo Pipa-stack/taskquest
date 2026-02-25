@@ -1,16 +1,18 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import db from '../db/db.js'
 import { aggregateLast7Days, getTodayStats } from '../domain/stats.js'
 import { todayKey } from '../domain/dateKey.js'
+import * as taskRepository from '../repositories/taskRepository.js'
 
 /**
  * Stats tab – shows XP today, tasks today, streak, and a 7-day table.
+ *
+ * DB access is fully delegated to taskRepository — this component never imports db.
  */
 export default function StatsTab({ streak }) {
   const today = todayKey()
 
   const allTasks = useLiveQuery(
-    () => db.tasks.toArray(),
+    () => taskRepository.getAll(),
     []
   )
 

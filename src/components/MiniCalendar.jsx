@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import db from '../db/db.js'
 import { getMonthMatrix, monthLabel } from '../domain/calendar.js'
 import { localDateKey } from '../domain/dateKey.js'
+import * as taskRepository from '../repositories/taskRepository.js'
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
 /**
  * Mini monthly calendar grid.
+ *
+ * DB access is fully delegated to taskRepository — this component never imports db.
  *
  * Props:
  *  - selectedDateKey  {string}   Currently selected YYYY-MM-DD date.
@@ -28,29 +30,25 @@ export default function MiniCalendar({ selectedDateKey, todayKey, onSelectDateKe
     })
   }, [selectedDateKey])
 
-  // Derive range for the Dexie query from viewKey
+  // Derive range for the query from viewKey
   const viewYM = viewKey.slice(0, 7) // "YYYY-MM"
   const [viewYear, viewMonth] = viewYM.split('-').map(Number)
   const daysInViewMonth = new Date(viewYear, viewMonth, 0).getDate()
   const startKey = viewKey // "YYYY-MM-01"
   const endKey = `${viewYM}-${String(daysInViewMonth).padStart(2, '0')}`
 
-  // Single range query → reduce to {dueDate: {pending, done}} in memory
+  // Single range query via repository → reduce to {dueDate: {pending, done}} in memory
   const tasksByDate = useLiveQuery(
     () =>
-      db.tasks
-        .where('dueDate')
-        .between(startKey, endKey, true, true)
-        .toArray()
-        .then((tasks) => {
-          const map = {}
-          for (const t of tasks) {
-            if (!map[t.dueDate]) map[t.dueDate] = { pending: 0, done: 0 }
-            if (t.status === 'pending') map[t.dueDate].pending += 1
-            else if (t.status === 'done') map[t.dueDate].done += 1
-          }
-          return map
-        }),
+      taskRepository.getRange(startKey, endKey).then((tasks) => {
+        const map = {}
+        for (const t of tasks) {
+          if (!map[t.dueDate]) map[t.dueDate] = { pending: 0, done: 0 }
+          if (t.status === 'pending') map[t.dueDate].pending += 1
+          else if (t.status === 'done') map[t.dueDate].done += 1
+        }
+        return map
+      }),
     [startKey, endKey],
   )
 
