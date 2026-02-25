@@ -96,6 +96,12 @@ export default function TaskList({ tasks, onComplete }) {
                           clone · 0 XP
                         </span>
                       )}
+                      {task.syncStatus === 'pending' && (
+                        <span className="sync-status-icon" title="Pendiente de sincronizar">⏳</span>
+                      )}
+                      {task.syncStatus === 'error' && (
+                        <span className="sync-status-icon" title="Error al sincronizar">⚠️</span>
+                      )}
                     </span>
 
                     <div className="task-actions">

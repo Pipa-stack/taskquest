@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { getDeviceId } from '../lib/deviceId.js'
 
 /**
  * TaskQuest IndexedDB database (Dexie wrapper).
@@ -24,6 +25,22 @@ import Dexie from 'dexie'
  *   dailyGoal        – target tasks per day (default 3)
  *   achievementsUnlocked – array of achievement ids
  *   rewardsUnlocked  – array of reward ids
+ *
+ * Schema v3
+ * ---------
+ * tasks gains new indexes:
+ *   deviceId         – device that created the task (multi-device sync)
+ *   localId          – mirrors the auto-increment id; stable reference for remote
+ *   [deviceId+localId] – compound index for sync lookups
+ *   syncStatus       – 'pending' | 'synced' | 'error'
+ *
+ * outbox (new table)
+ *   ++id      – auto-increment
+ *   createdAt – ISO timestamp; used for ordering
+ *   status    – 'pending' | 'sent' | 'failed'
+ *   type      – 'UPSERT_TASK' | 'DELETE_TASK'
+ *   payload   – task snapshot object
+ *   retryCount – number of failed attempts
  */
 const db = new Dexie('taskquest')
 
@@ -42,6 +59,21 @@ db.version(2).stores({
     if (player.dailyGoal === undefined) player.dailyGoal = 3
     if (player.achievementsUnlocked === undefined) player.achievementsUnlocked = []
     if (player.rewardsUnlocked === undefined) player.rewardsUnlocked = []
+  })
+})
+
+db.version(3).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  const deviceId = getDeviceId()
+  const now = new Date().toISOString()
+  return tx.tasks.toCollection().modify((task) => {
+    if (!task.deviceId) task.deviceId = deviceId
+    if (task.localId === undefined) task.localId = task.id
+    if (!task.updatedAt) task.updatedAt = task.createdAt || now
+    if (!task.syncStatus) task.syncStatus = 'synced' // existing tasks are considered already synced
   })
 })
 

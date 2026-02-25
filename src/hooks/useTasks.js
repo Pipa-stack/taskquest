@@ -5,7 +5,9 @@ import { todayKey } from '../domain/dateKey.js'
 import { isClone } from '../domain/antifarm.js'
 import { taskXpReward, calcUpdatedStreak } from '../domain/gamification.js'
 import { calcCombo, applyCombo } from '../domain/combo.js'
-import { checkNewAchievements, getAchievement } from '../domain/achievements.js'
+import { checkNewAchievements } from '../domain/achievements.js'
+import { taskRepository } from '../repositories/taskRepository.js'
+import { getDeviceId } from '../lib/deviceId.js'
 
 /**
  * React hook that exposes tasks for a given date and mutation helpers.
@@ -35,6 +37,7 @@ export function useTasks(selectedDate) {
   /**
    * Creates a new task for `dateKey`. Detects clones (same normalised title)
    * and marks them with isClone=true so they earn 0 XP on completion.
+   * Also enqueues an outbox entry for remote sync.
    */
   const addTask = useCallback(
     async (title) => {
@@ -44,11 +47,9 @@ export function useTasks(selectedDate) {
       const existing = await db.tasks.where('dueDate').equals(dateKey).toArray()
       const clone = isClone({ title: trimmed, dueDate: dateKey }, existing)
 
-      await db.tasks.add({
+      await taskRepository.create({
         title: trimmed,
         dueDate: dateKey,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
         isClone: clone,
       })
     },
@@ -58,6 +59,7 @@ export function useTasks(selectedDate) {
   /**
    * Marks a task as done, awards XP with combo multiplier, updates streak,
    * and checks for newly unlocked achievements.
+   * Also updates task.updatedAt / syncStatus and enqueues an outbox entry.
    *
    * Idempotent: silently no-ops if the task is already done.
    * @returns {Promise<{ xpEarned: number, newAchievements: string[] }>}
@@ -68,13 +70,16 @@ export function useTasks(selectedDate) {
 
     const baseXp = taskXpReward(task)
     const now = new Date()
+    const nowISO = now.toISOString()
     let xpEarned = 0
     let newAchievements = []
 
-    await db.transaction('rw', [db.tasks, db.players], async () => {
+    await db.transaction('rw', [db.tasks, db.players, db.outbox], async () => {
       await db.tasks.update(taskId, {
         status: 'done',
-        completedAt: now.toISOString(),
+        completedAt: nowISO,
+        updatedAt: nowISO,
+        syncStatus: 'pending',
       })
 
       const player = (await db.players.get(1)) ?? {
@@ -131,9 +136,29 @@ export function useTasks(selectedDate) {
         id: 1,
         xp: player.xp + xpEarned,
         combo: newCombo,
-        lastCompleteAt: now.toISOString(),
+        lastCompleteAt: nowISO,
         achievementsUnlocked: [...currentUnlocked, ...newAchievements],
         ...streakUpdate,
+      })
+
+      // Enqueue outbox entry for remote sync
+      const updatedTask = await db.tasks.get(taskId)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_TASK',
+        payload: {
+          localId: updatedTask.localId ?? updatedTask.id,
+          title: updatedTask.title,
+          dueDate: updatedTask.dueDate,
+          status: updatedTask.status,
+          isClone: updatedTask.isClone ?? false,
+          createdAt: updatedTask.createdAt,
+          completedAt: updatedTask.completedAt ?? null,
+          deviceId: updatedTask.deviceId ?? getDeviceId(),
+          updatedAt: updatedTask.updatedAt,
+        },
+        retryCount: 0,
       })
     })
 

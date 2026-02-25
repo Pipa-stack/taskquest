@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useTasks } from './hooks/useTasks.js'
 import { usePlayer } from './hooks/usePlayer.js'
+import { useAuth } from './hooks/useAuth.js'
 import TaskForm from './components/TaskForm.jsx'
 import TaskList from './components/TaskList.jsx'
 import PlayerStats from './components/PlayerStats.jsx'
@@ -13,11 +15,15 @@ import MiniCalendar from './components/MiniCalendar.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
+import db from './db/db.js'
+import { supabase } from './lib/supabase.js'
+import { pushOutbox, pullRemote } from './services/taskSyncService.js'
 import './App.css'
 
 let notifIdCounter = 0
 
 const TABS = ['Tasks', 'Rewards', 'Stats']
+const SYNC_INTERVAL_MS = 15_000
 
 // Persist the selected date across reloads (falls back to today if stale)
 function loadSelectedDate() {
@@ -39,16 +45,38 @@ function App() {
 
   const { tasks, addTask, completeTask } = useTasks(selectedDateKey)
   const player = usePlayer()
+  const { user } = useAuth()
 
   const [activeTab, setActiveTab] = useState('Tasks')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
+
+  // Live count of pending outbox entries (drives the sync indicator)
+  const pendingOutboxCount = useLiveQuery(
+    () => db.outbox.where('status').equals('pending').count(),
+    [],
+    0
+  )
 
   // Keep a ref of current XP so handleComplete can read it synchronously
   const playerXpRef = useRef(player.xp)
   useEffect(() => {
     playerXpRef.current = player.xp
   }, [player.xp])
+
+  // Sync loop: run immediately on login, then every SYNC_INTERVAL_MS
+  useEffect(() => {
+    if (!user || !supabase) return
+
+    const sync = () => {
+      pushOutbox({ supabase, userId: user.id }).catch(console.warn)
+      pullRemote({ supabase, userId: user.id }).catch(console.warn)
+    }
+
+    sync()
+    const intervalId = setInterval(sync, SYNC_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [user])
 
   const handleSelectDateKey = useCallback((dateKey) => {
     setSelectedDateKey(dateKey)
@@ -95,11 +123,20 @@ function App() {
     [completeTask, addNotification]
   )
 
+  const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
+
   return (
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">TaskQuest</h1>
-        <p className="app-date">Hoy · {today}</p>
+        <div className="app-header-right">
+          <p className="app-date">Hoy · {today}</p>
+          {isSyncing && (
+            <span className="sync-indicator" title="Sincronizando con la nube…">
+              ☁ syncing…
+            </span>
+          )}
+        </div>
       </header>
 
       {/* Tab navigation */}
