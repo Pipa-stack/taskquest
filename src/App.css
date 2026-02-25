@@ -21,6 +21,33 @@ body {
   margin-bottom: 2rem;
 }
 
+.app-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.sync-indicator {
+  font-size: 0.72rem;
+  color: #60a5fa;
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.sync-status-icon {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin-left: 0.25rem;
+}
+
 .app-title {
   font-size: 2.4rem;
   font-weight: 800;
