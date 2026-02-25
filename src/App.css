@@ -745,3 +745,202 @@ ul {
   content: ' ·';
   color: #a78bfa;
 }
+
+/* ── Mini Calendar ────────────────────────────────────────────────── */
+.mini-calendar {
+  background: #16161f;
+  border: 1px solid #2a2a3e;
+  border-radius: 14px;
+  padding: 0.85rem 0.9rem;
+  user-select: none;
+}
+
+.mc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.mc-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e2e2e7;
+  letter-spacing: 0.03em;
+}
+
+.mc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid #2a2a3e;
+  border-radius: 6px;
+  color: #6a6a8a;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.13s, color 0.13s, border-color 0.13s;
+  flex-shrink: 0;
+}
+
+.mc-nav:hover {
+  background: #1e1e2e;
+  color: #e2e2e7;
+  border-color: #3a3a5e;
+}
+
+.mc-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.mc-day-label {
+  text-align: center;
+  padding: 0.2rem 0 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: #4a4a6a;
+  text-transform: uppercase;
+}
+
+.mc-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 32px;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 2px 0;
+}
+
+.mc-cell:hover:not(.mc-cell-empty) {
+  background: #1e1e2e;
+}
+
+.mc-cell-empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Today: ring border */
+.mc-today {
+  border-color: #a78bfa;
+}
+
+/* Selected: filled background */
+.mc-selected {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.22),
+    rgba(96, 165, 250, 0.18)
+  );
+  border-color: #a78bfa;
+}
+
+.mc-today.mc-selected {
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.3),
+    rgba(96, 165, 250, 0.25)
+  );
+}
+
+.mc-day-num {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #a0a0c0;
+  line-height: 1;
+}
+
+.mc-today .mc-day-num,
+.mc-selected .mc-day-num {
+  color: #e2e2e7;
+  font-weight: 700;
+}
+
+/* Activity indicator dots */
+.mc-dots {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mc-dot-done {
+  background: #4ade80;
+}
+
+.mc-dot-pending {
+  background: #d4d4e8;
+}
+
+/* ── Mobile calendar toggle ───────────────────────────────────────── */
+/* Toggle button hidden on desktop, visible on mobile */
+.mc-toggle-btn {
+  display: none;
+}
+
+/* Calendar wrapper always open on desktop */
+.mc-wrapper {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 719px) {
+  .mc-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.45rem 0.75rem;
+    background: transparent;
+    border: 1px solid #2a2a3e;
+    border-radius: 8px;
+    color: #5a5a7a;
+    font-size: 0.73rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    margin-bottom: 0.5rem;
+  }
+
+  .mc-toggle-btn:hover {
+    background: #1a1a28;
+    border-color: #3a3a5e;
+    color: #8a8ab0;
+  }
+
+  /* Collapsed: hide calendar */
+  .mc-wrapper {
+    display: none;
+    margin-bottom: 0;
+  }
+
+  /* Expanded */
+  .mc-wrapper.mc-open {
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+}
