@@ -53,6 +53,7 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         unlocked_rewards: p.rewardsUnlocked ?? [],
         coins: p.coins ?? 0,
         unlocked_characters: p.unlockedCharacters ?? [],
+        character_stages: p.characterStages ?? {},
         updated_at: p.updatedAt,
       }
 
@@ -123,6 +124,7 @@ export async function pullPlayerRemote({ supabase, userId }) {
         rewardsUnlocked: data.unlocked_rewards ?? [],
         coins: data.coins ?? 0,
         unlockedCharacters: data.unlocked_characters ?? [],
+        characterStages: data.character_stages ?? {},
         updatedAt: data.updated_at,
         syncStatus: 'synced',
       }

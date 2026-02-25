@@ -229,6 +229,9 @@ function App() {
                 />
                 <CharacterCollection
                   unlockedCharacters={player.unlockedCharacters}
+                  characterStages={player.characterStages}
+                  coins={player.coins}
+                  onNotify={addNotification}
                 />
               </motion.div>
             )}

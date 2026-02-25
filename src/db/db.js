@@ -117,4 +117,25 @@ db.version(5).stores({
   })
 })
 
+/**
+ * Schema v6
+ * ---------
+ * players gains:
+ *   characterStages – map of { [characterId]: 1|2|3 } tracking evolution stage per character.
+ *                     Default 1 for already-unlocked characters (applied lazily via domain).
+ *
+ * Remote SQL (add to player_state):
+ *   alter table public.player_state
+ *     add column if not exists character_stages jsonb not null default '{}'::jsonb;
+ */
+db.version(6).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.characterStages === undefined) player.characterStages = {}
+  })
+})
+
 export default db

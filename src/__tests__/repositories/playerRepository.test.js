@@ -19,8 +19,9 @@ vi.mock('../../db/db.js', () => {
 // Mock characters domain so tests don't depend on catalog data
 vi.mock('../../domain/characters.js', () => ({
   getCharacter: vi.fn((id) => {
-    if (id === 'guerrero_novato') return { id: 'guerrero_novato', name: 'Guerrero Novato', priceCoins: 50 }
-    if (id === 'oraculo_eterno') return { id: 'oraculo_eterno', name: 'Oráculo Eterno', priceCoins: 1000 }
+    if (id === 'guerrero_novato') return { id: 'guerrero_novato', name: 'Guerrero Novato', rarity: 'common', priceCoins: 50 }
+    if (id === 'oraculo_eterno') return { id: 'oraculo_eterno', name: 'Oráculo Eterno', rarity: 'legendary', priceCoins: 1000 }
+    if (id === 'dragon_guardian') return { id: 'dragon_guardian', name: 'Dragón Guardián', rarity: 'epic', priceCoins: 400 }
     return undefined
   }),
 }))
@@ -60,6 +61,7 @@ describe('playerToPayload', () => {
       rewardsUnlocked: ['r1', 'r2'],
       coins: 120,
       unlockedCharacters: ['guerrero_novato'],
+      characterStages: {},
       updatedAt: '2024-06-01T10:00:00.000Z',
     })
     expect(payload).not.toHaveProperty('combo')
@@ -374,5 +376,141 @@ describe('playerRepository.buyCharacter', () => {
     const putCall = db.players.put.mock.calls[0][0]
     expect(putCall.coins).toBe(0)
     expect(putCall.coins).toBeGreaterThanOrEqual(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.evolveCharacter
+// ---------------------------------------------------------------------------
+describe('playerRepository.evolveCharacter', () => {
+  it('deducts coins and advances characterStages from 1 to 2', async () => {
+    // guerrero_novato is 'common', Stage 1→2 costs 120
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 200,
+      unlockedCharacters: ['guerrero_novato'],
+      characterStages: {},
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.evolveCharacter('guerrero_novato')
+
+    expect(success).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const putCall = db.players.put.mock.calls[0][0]
+    expect(putCall.coins).toBe(80)           // 200 - 120
+    expect(putCall.characterStages.guerrero_novato).toBe(2)
+    expect(putCall.syncStatus).toBe('pending')
+
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    const outboxEntry = db.outbox.add.mock.calls[0][0]
+    expect(outboxEntry.type).toBe('UPSERT_PLAYER')
+    expect(outboxEntry.payload.characterStages.guerrero_novato).toBe(2)
+    expect(outboxEntry.payload.coins).toBe(80)
+  })
+
+  it('advances from Stage 2 to Stage 3 (common: costs 300)', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 400,
+      unlockedCharacters: ['guerrero_novato'],
+      characterStages: { guerrero_novato: 2 },
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.evolveCharacter('guerrero_novato')
+
+    expect(success).toBe(true)
+    const putCall = db.players.put.mock.calls[0][0]
+    expect(putCall.coins).toBe(100)          // 400 - 300
+    expect(putCall.characterStages.guerrero_novato).toBe(3)
+  })
+
+  it('returns false and does NOT update when coins are insufficient', async () => {
+    // Stage 1→2 costs 120, player only has 50
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 50,
+      unlockedCharacters: ['guerrero_novato'],
+      characterStages: {},
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.evolveCharacter('guerrero_novato')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false (idempotent) when character is already at Stage 3', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 9999,
+      unlockedCharacters: ['guerrero_novato'],
+      characterStages: { guerrero_novato: 3 },
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.evolveCharacter('guerrero_novato')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false when character is not unlocked', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 9999,
+      unlockedCharacters: [],
+      characterStages: {},
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.evolveCharacter('guerrero_novato')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for unknown character id', async () => {
+    db.players.get.mockResolvedValue({ id: 1, coins: 9999, unlockedCharacters: [] })
+
+    const success = await playerRepository.evolveCharacter('nonexistent_char')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('enqueues UPSERT_PLAYER outbox entry including characterStages', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 500,
+      unlockedCharacters: ['dragon_guardian'],
+      characterStages: { dragon_guardian: 1 },
+      rewardsUnlocked: [],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.evolveCharacter('dragon_guardian') // epic, Stage 1→2 costs 260
+
+    const outboxEntry = db.outbox.add.mock.calls[0][0]
+    expect(outboxEntry.payload.characterStages).toBeDefined()
+    expect(outboxEntry.payload.characterStages.dragon_guardian).toBe(2)
+    expect(outboxEntry.payload.coins).toBe(240) // 500 - 260
   })
 })

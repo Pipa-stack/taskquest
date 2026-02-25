@@ -1123,3 +1123,111 @@ ul {
 .filter-chip.rarity-rare.filter-chip-active    { border-color: #3b82f6; color: #60a5fa; background: rgba(59,130,246,0.12); }
 .filter-chip.rarity-epic.filter-chip-active    { border-color: #a855f7; color: #c084fc; background: rgba(168,85,247,0.12); }
 .filter-chip.rarity-legendary.filter-chip-active { border-color: #f59e0b; color: #fbbf24; background: rgba(245,158,11,0.12); }
+
+/* ── Evolution ──────────────────────────────────────────────────────── */
+
+/* Stage badge inside character card */
+.char-stage-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 5px;
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Max stage indicator */
+.char-max-stage {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+/* Evolve button */
+.btn-evolve {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  background: transparent;
+  border: 1.5px solid #34d399;
+  border-radius: 7px;
+  color: #34d399;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-evolve:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.14);
+  border-color: #6ee7b7;
+  color: #6ee7b7;
+}
+
+.btn-evolve:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #4a4a6a;
+  color: #4a4a6a;
+}
+
+/* Evolution full-screen overlay */
+.evo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+.evo-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.evo-glow {
+  font-size: 4rem;
+  filter: drop-shadow(0 0 18px rgba(52, 211, 153, 0.8)) drop-shadow(0 0 40px rgba(167, 139, 250, 0.6));
+  animation: evo-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes evo-pulse {
+  from { filter: drop-shadow(0 0 12px rgba(52,211,153,0.7)) drop-shadow(0 0 30px rgba(167,139,250,0.5)); }
+  to   { filter: drop-shadow(0 0 28px rgba(52,211,153,1))   drop-shadow(0 0 60px rgba(167,139,250,0.9)); }
+}
+
+.evo-label {
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: #a5f3fc;
+  text-shadow: 0 0 20px rgba(165,243,252,0.8);
+}
+
+.evo-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e2e2e7;
+}
+
+.evo-stage-arrow {
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.evo-stage-arrow strong {
+  color: #34d399;
+}
+
+.evo-sparkles {
+  font-size: 1.5rem;
+}

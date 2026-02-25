@@ -1,5 +1,6 @@
 import db from '../db/db.js'
 import { getCharacter } from '../domain/characters.js'
+import { getStage, canEvolve, evolveCost } from '../domain/evolution.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -15,6 +16,7 @@ export function playerToPayload(player) {
     rewardsUnlocked: player.rewardsUnlocked ?? [],
     coins: player.coins ?? 0,
     unlockedCharacters: player.unlockedCharacters ?? [],
+    characterStages: player.characterStages ?? {},
     updatedAt: player.updatedAt,
   }
 }
@@ -203,6 +205,75 @@ export const playerRepository = {
       const finalPlayer = {
         ...updatedPlayer,
         unlockedCharacters: [...(player.unlockedCharacters ?? []), characterId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(finalPlayer)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(finalPlayer),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Evolves a character to the next stage (1→2 or 2→3).
+   *
+   * Guards (all checked atomically inside the transaction):
+   *   1. Character must exist in the catalog.
+   *   2. Character must be unlocked (in unlockedCharacters).
+   *   3. Character must be able to evolve (stage < 3).
+   *   4. Player must have enough coins.
+   *
+   * Idempotent: calling evolveCharacter on a Stage 3 character returns false without
+   * modifying any state.
+   *
+   * @param {string} characterId
+   * @returns {Promise<boolean>} true if evolution succeeded
+   */
+  async evolveCharacter(characterId) {
+    const character = getCharacter(characterId)
+    if (!character) return false
+
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        unlockedCharacters: [],
+        characterStages: {},
+      }
+
+      // Guard: must be unlocked
+      const isUnlocked = (player.unlockedCharacters ?? []).includes(characterId)
+      if (!isUnlocked) return
+
+      // Guard: must have evolution remaining
+      if (!canEvolve(characterId, player)) return
+
+      // Guard: must have enough coins
+      const cost = evolveCost(characterId, character.rarity, player)
+      if (cost === null) return
+
+      const { ok, updatedPlayer } = playerRepository._spendCoinsInTx(cost, player)
+      if (!ok) return
+
+      const nextStage = getStage(characterId, player) + 1
+      const finalPlayer = {
+        ...updatedPlayer,
+        characterStages: {
+          ...(player.characterStages ?? {}),
+          [characterId]: nextStage,
+        },
         updatedAt: now,
         syncStatus: 'pending',
       }
