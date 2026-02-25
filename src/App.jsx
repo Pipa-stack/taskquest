@@ -18,6 +18,7 @@ import { getAchievement } from './domain/achievements.js'
 import db from './db/db.js'
 import { supabase } from './lib/supabase.js'
 import { pushOutbox, pullRemote } from './services/taskSyncService.js'
+import { pushPlayerOutbox, pullPlayerRemote } from './services/playerSyncService.js'
 import './App.css'
 
 let notifIdCounter = 0
@@ -71,6 +72,8 @@ function App() {
     const sync = () => {
       pushOutbox({ supabase, userId: user.id }).catch(console.warn)
       pullRemote({ supabase, userId: user.id }).catch(console.warn)
+      pushPlayerOutbox({ supabase, userId: user.id }).catch(console.warn)
+      pullPlayerRemote({ supabase, userId: user.id }).catch(console.warn)
     }
 
     sync()
@@ -227,6 +230,7 @@ function App() {
             xpToNext={player.xpToNext}
             combo={player.combo}
             dailyGoal={player.dailyGoal}
+            syncStatus={player.syncStatus}
           />
         </aside>
       </div>

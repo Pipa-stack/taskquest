@@ -32,6 +32,7 @@ export async function pushOutbox({ supabase, userId }) {
   const allPending = await db.outbox
     .where('status')
     .equals('pending')
+    .filter((item) => item.type === 'UPSERT_TASK' || item.type === 'DELETE_TASK')
     .sortBy('createdAt')
 
   const batch = allPending.slice(0, PUSH_BATCH_SIZE)

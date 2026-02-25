@@ -7,6 +7,7 @@ import { taskXpReward, calcUpdatedStreak } from '../domain/gamification.js'
 import { calcCombo, applyCombo } from '../domain/combo.js'
 import { checkNewAchievements } from '../domain/achievements.js'
 import { taskRepository } from '../repositories/taskRepository.js'
+import { playerRepository } from '../repositories/playerRepository.js'
 import { getDeviceId } from '../lib/deviceId.js'
 
 /**
@@ -131,7 +132,7 @@ export function useTasks(selectedDate) {
       const currentUnlocked = player.achievementsUnlocked ?? []
       newAchievements = checkNewAchievements(currentUnlocked, achievementCtx)
 
-      await db.players.put({
+      const updatedPlayer = {
         ...player,
         id: 1,
         xp: player.xp + xpEarned,
@@ -139,9 +140,12 @@ export function useTasks(selectedDate) {
         lastCompleteAt: nowISO,
         achievementsUnlocked: [...currentUnlocked, ...newAchievements],
         ...streakUpdate,
-      })
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updatedPlayer)
 
-      // Enqueue outbox entry for remote sync
+      // Enqueue outbox entries for remote sync (task + player)
       const updatedTask = await db.tasks.get(taskId)
       await db.outbox.add({
         createdAt: nowISO,
@@ -160,6 +164,7 @@ export function useTasks(selectedDate) {
         },
         retryCount: 0,
       })
+      await playerRepository.enqueueUpsert(updatedPlayer, nowISO)
     })
 
     return { xpEarned, newAchievements }
