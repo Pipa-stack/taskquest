@@ -51,8 +51,8 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         last_active_date: p.lastActiveDate ?? null,
         daily_goal: p.dailyGoal ?? 3,
         unlocked_rewards: p.rewardsUnlocked ?? [],
-        // PR11: unlocked_characters will be populated when character drops are implemented
-        unlocked_characters: [],
+        coins: p.coins ?? 0,
+        unlocked_characters: p.unlockedCharacters ?? [],
         updated_at: p.updatedAt,
       }
 
@@ -121,6 +121,8 @@ export async function pullPlayerRemote({ supabase, userId }) {
         lastActiveDate: data.last_active_date ?? null,
         dailyGoal: data.daily_goal ?? 3,
         rewardsUnlocked: data.unlocked_rewards ?? [],
+        coins: data.coins ?? 0,
+        unlockedCharacters: data.unlocked_characters ?? [],
         updatedAt: data.updated_at,
         syncStatus: 'synced',
       }

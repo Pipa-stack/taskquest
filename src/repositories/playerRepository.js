@@ -1,4 +1,5 @@
 import db from '../db/db.js'
+import { getCharacter } from '../domain/characters.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -12,6 +13,8 @@ export function playerToPayload(player) {
     lastActiveDate: player.lastActiveDate ?? null,
     dailyGoal: player.dailyGoal ?? 3,
     rewardsUnlocked: player.rewardsUnlocked ?? [],
+    coins: player.coins ?? 0,
+    unlockedCharacters: player.unlockedCharacters ?? [],
     updatedAt: player.updatedAt,
   }
 }
@@ -22,9 +25,6 @@ export function playerToPayload(player) {
  *
  * Source of truth is always Dexie (offline-first). Sync is eventual via the
  * outbox pattern — UI is never blocked waiting for the network.
- *
- * PR11 will extend this with character-related mutations once the
- * unlocked_characters field is added to player_state.
  */
 export const playerRepository = {
   /**
@@ -109,6 +109,109 @@ export const playerRepository = {
         status: 'pending',
         type: 'UPSERT_PLAYER',
         payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Adds coins to the player's balance (never negative).
+   * Runs in a single atomic transaction.
+   *
+   * @param {number} amount - Coins to add (must be >= 0)
+   */
+  async addCoins(amount) {
+    if (amount <= 0) return
+    const now = new Date().toISOString()
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, coins: 0 }
+      const updated = {
+        ...player,
+        id: 1,
+        coins: (player.coins ?? 0) + amount,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
+  },
+
+  /**
+   * Spends coins from the player's balance.
+   * Does nothing and returns false if balance is insufficient.
+   * Must be called inside an existing transaction when composing with unlockCharacter.
+   *
+   * @param {number} amount - Coins to spend (must be > 0)
+   * @param {object} player - Current player record (already fetched within the transaction)
+   * @returns {{ ok: boolean, updatedPlayer: object|null }}
+   */
+  _spendCoinsInTx(amount, player) {
+    if ((player.coins ?? 0) < amount) return { ok: false, updatedPlayer: null }
+    const updatedPlayer = {
+      ...player,
+      id: 1,
+      coins: Math.max(0, (player.coins ?? 0) - amount),
+    }
+    return { ok: true, updatedPlayer }
+  },
+
+  /**
+   * Purchases a character from the catalog:
+   *   1. Validates the character exists in the catalog.
+   *   2. If already owned → no-op (returns false).
+   *   3. If insufficient coins → returns false.
+   *   4. Otherwise: deducts coins, adds character to unlockedCharacters, enqueues sync.
+   * All writes happen in a single atomic transaction.
+   *
+   * @param {string} characterId
+   * @returns {Promise<boolean>} true if purchase succeeded
+   */
+  async buyCharacter(characterId) {
+    const character = getCharacter(characterId)
+    if (!character) return false
+
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        unlockedCharacters: [],
+      }
+
+      const already = (player.unlockedCharacters ?? []).includes(characterId)
+      if (already) return
+
+      const { ok, updatedPlayer } = playerRepository._spendCoinsInTx(
+        character.priceCoins,
+        player
+      )
+      if (!ok) return
+
+      const finalPlayer = {
+        ...updatedPlayer,
+        unlockedCharacters: [...(player.unlockedCharacters ?? []), characterId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(finalPlayer)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(finalPlayer),
         retryCount: 0,
       })
       success = true

@@ -9,6 +9,7 @@ import { checkNewAchievements } from '../domain/achievements.js'
 import { taskRepository } from '../repositories/taskRepository.js'
 import { playerRepository } from '../repositories/playerRepository.js'
 import { getDeviceId } from '../lib/deviceId.js'
+import { coinsForTask } from '../domain/coins.js'
 
 /**
  * React hook that exposes tasks for a given date and mutation helpers.
@@ -70,6 +71,7 @@ export function useTasks(selectedDate) {
     if (!task || task.status === 'done') return { xpEarned: 0, newAchievements: [] }
 
     const baseXp = taskXpReward(task)
+    const coinsEarned = coinsForTask(task)
     const now = new Date()
     const nowISO = now.toISOString()
     let xpEarned = 0
@@ -136,6 +138,7 @@ export function useTasks(selectedDate) {
         ...player,
         id: 1,
         xp: player.xp + xpEarned,
+        coins: (player.coins ?? 0) + coinsEarned,
         combo: newCombo,
         lastCompleteAt: nowISO,
         achievementsUnlocked: [...currentUnlocked, ...newAchievements],
@@ -167,7 +170,7 @@ export function useTasks(selectedDate) {
       await playerRepository.enqueueUpsert(updatedPlayer, nowISO)
     })
 
-    return { xpEarned, newAchievements }
+    return { xpEarned, coinsEarned, newAchievements }
   }, [today])
 
   return { tasks: tasks ?? [], addTask, completeTask, dateKey }

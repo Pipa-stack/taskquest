@@ -971,3 +971,155 @@ ul {
     margin-bottom: 0.75rem;
   }
 }
+
+/* ── Character Shop & Collection ──────────────────────────────────── */
+.character-shop,
+.character-collection {
+  margin-bottom: 2rem;
+}
+
+.shop-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.filter-chip {
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #2a2a3e;
+  background: #16161f;
+  color: #9ca3af;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-chip:hover {
+  border-color: #4a4a6e;
+  color: #e2e2e7;
+}
+
+.filter-chip-active {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: #a78bfa;
+  color: #c4b5fd;
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.85rem;
+}
+
+.character-card {
+  background: #16161f;
+  border: 1.5px solid #2a2a3e;
+  border-radius: 12px;
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.character-card:hover {
+  transform: translateY(-2px);
+}
+
+.character-owned {
+  background: #131320;
+}
+
+.character-locked {
+  opacity: 0.45;
+  filter: grayscale(0.4);
+}
+
+/* Rarity border accents */
+.rarity-border-common  { border-color: #4b5563; }
+.rarity-border-rare    { border-color: #3b82f6; }
+.rarity-border-epic    { border-color: #a855f7; }
+.rarity-border-legendary { border-color: #f59e0b; box-shadow: 0 0 10px rgba(245,158,11,0.2); }
+
+.char-emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.char-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #e2e2e7;
+}
+
+.char-lore {
+  font-size: 0.68rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.char-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  width: 100%;
+}
+
+/* Rarity badges */
+.rarity-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rarity-badge.rarity-common     { background: rgba(75,85,99,0.3);  color: #9ca3af; }
+.rarity-badge.rarity-rare       { background: rgba(59,130,246,0.2); color: #60a5fa; }
+.rarity-badge.rarity-epic       { background: rgba(168,85,247,0.2); color: #c084fc; }
+.rarity-badge.rarity-legendary  { background: rgba(245,158,11,0.2); color: #fbbf24; }
+
+.btn-buy {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  background: transparent;
+  border: 1.5px solid #a78bfa;
+  border-radius: 7px;
+  color: #a78bfa;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-buy:hover:not(:disabled) {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: #c4b5fd;
+}
+
+.btn-buy:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #4a4a6a;
+  color: #4a4a6a;
+}
+
+.char-owned-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+/* Rarity filter chip color hints */
+.filter-chip.rarity-rare.filter-chip-active    { border-color: #3b82f6; color: #60a5fa; background: rgba(59,130,246,0.12); }
+.filter-chip.rarity-epic.filter-chip-active    { border-color: #a855f7; color: #c084fc; background: rgba(168,85,247,0.12); }
+.filter-chip.rarity-legendary.filter-chip-active { border-color: #f59e0b; color: #fbbf24; background: rgba(245,158,11,0.12); }

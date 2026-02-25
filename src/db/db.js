@@ -99,4 +99,22 @@ db.version(4).stores({
   })
 })
 
+/**
+ * Schema v5
+ * ---------
+ * players gains:
+ *   coins              – earned currency for the character shop (bigint, default 0)
+ *   unlockedCharacters – array of character ids purchased from the shop
+ */
+db.version(5).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.coins === undefined) player.coins = 0
+    if (player.unlockedCharacters === undefined) player.unlockedCharacters = []
+  })
+})
+
 export default db

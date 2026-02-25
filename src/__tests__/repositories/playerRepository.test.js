@@ -16,6 +16,15 @@ vi.mock('../../db/db.js', () => {
   return { default: mockDb }
 })
 
+// Mock characters domain so tests don't depend on catalog data
+vi.mock('../../domain/characters.js', () => ({
+  getCharacter: vi.fn((id) => {
+    if (id === 'guerrero_novato') return { id: 'guerrero_novato', name: 'Guerrero Novato', priceCoins: 50 }
+    if (id === 'oraculo_eterno') return { id: 'oraculo_eterno', name: 'Oráculo Eterno', priceCoins: 1000 }
+    return undefined
+  }),
+}))
+
 import { playerRepository, playerToPayload } from '../../repositories/playerRepository.js'
 import db from '../../db/db.js'
 
@@ -27,7 +36,7 @@ beforeEach(() => {
 // playerToPayload
 // ---------------------------------------------------------------------------
 describe('playerToPayload', () => {
-  it('includes only synced fields (not combo / lastCompleteAt / achievementsUnlocked)', () => {
+  it('includes synced fields including coins and unlockedCharacters', () => {
     const player = {
       id: 1,
       xp: 500,
@@ -35,6 +44,8 @@ describe('playerToPayload', () => {
       lastActiveDate: '2024-06-01',
       dailyGoal: 5,
       rewardsUnlocked: ['r1', 'r2'],
+      coins: 120,
+      unlockedCharacters: ['guerrero_novato'],
       combo: 1.2,
       lastCompleteAt: '2024-06-01T10:00:00.000Z',
       achievementsUnlocked: ['a1'],
@@ -47,6 +58,8 @@ describe('playerToPayload', () => {
       lastActiveDate: '2024-06-01',
       dailyGoal: 5,
       rewardsUnlocked: ['r1', 'r2'],
+      coins: 120,
+      unlockedCharacters: ['guerrero_novato'],
       updatedAt: '2024-06-01T10:00:00.000Z',
     })
     expect(payload).not.toHaveProperty('combo')
@@ -61,6 +74,8 @@ describe('playerToPayload', () => {
     expect(payload.lastActiveDate).toBeNull()
     expect(payload.dailyGoal).toBe(3)
     expect(payload.rewardsUnlocked).toEqual([])
+    expect(payload.coins).toBe(0)
+    expect(payload.unlockedCharacters).toEqual([])
   })
 })
 
@@ -194,6 +209,8 @@ describe('playerRepository.enqueueUpsert', () => {
       lastActiveDate: '2024-06-01',
       dailyGoal: 4,
       rewardsUnlocked: ['r1'],
+      coins: 60,
+      unlockedCharacters: [],
       updatedAt: '2024-06-01T10:00:00.000Z',
     }
 
@@ -208,5 +225,154 @@ describe('playerRepository.enqueueUpsert', () => {
     expect(entry.payload.streak).toBe(5)
     expect(entry.payload.dailyGoal).toBe(4)
     expect(entry.payload.rewardsUnlocked).toEqual(['r1'])
+    expect(entry.payload.coins).toBe(60)
+    expect(entry.payload.unlockedCharacters).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.addCoins
+// ---------------------------------------------------------------------------
+describe('playerRepository.addCoins', () => {
+  it('increments coins and enqueues UPSERT_PLAYER', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      xp: 0,
+      coins: 20,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.addCoins(10)
+
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const putCall = db.players.put.mock.calls[0][0]
+    expect(putCall.coins).toBe(30)
+    expect(putCall.syncStatus).toBe('pending')
+
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    const entry = db.outbox.add.mock.calls[0][0]
+    expect(entry.type).toBe('UPSERT_PLAYER')
+    expect(entry.payload.coins).toBe(30)
+  })
+
+  it('creates player from defaults when none exists', async () => {
+    db.players.get.mockResolvedValue(undefined)
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.addCoins(5)
+
+    const putCall = db.players.put.mock.calls[0][0]
+    expect(putCall.coins).toBe(5)
+    expect(putCall.id).toBe(1)
+  })
+
+  it('does nothing when amount is 0 or negative', async () => {
+    db.players.get.mockResolvedValue({ id: 1, coins: 10 })
+
+    await playerRepository.addCoins(0)
+    await playerRepository.addCoins(-5)
+
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.buyCharacter
+// ---------------------------------------------------------------------------
+describe('playerRepository.buyCharacter', () => {
+  it('deducts coins and unlocks character when player can afford it', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      xp: 0,
+      coins: 100,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.buyCharacter('guerrero_novato')
+
+    expect(success).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const updatedPlayer = db.players.put.mock.calls[0][0]
+    expect(updatedPlayer.coins).toBe(50) // 100 - 50
+    expect(updatedPlayer.unlockedCharacters).toContain('guerrero_novato')
+    expect(updatedPlayer.syncStatus).toBe('pending')
+
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    const entry = db.outbox.add.mock.calls[0][0]
+    expect(entry.type).toBe('UPSERT_PLAYER')
+    expect(entry.payload.unlockedCharacters).toContain('guerrero_novato')
+    expect(entry.payload.coins).toBe(50)
+  })
+
+  it('returns false and does NOT update when coins are insufficient', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      xp: 0,
+      coins: 30,
+      unlockedCharacters: [],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.buyCharacter('guerrero_novato') // costs 50
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('is idempotent — returns false if character already owned', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      xp: 0,
+      coins: 500,
+      unlockedCharacters: ['guerrero_novato'],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const success = await playerRepository.buyCharacter('guerrero_novato')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for unknown character id', async () => {
+    db.players.get.mockResolvedValue({ id: 1, coins: 9999, unlockedCharacters: [] })
+
+    const success = await playerRepository.buyCharacter('nonexistent_char')
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('coins never go negative', async () => {
+    db.players.get.mockResolvedValue({
+      id: 1,
+      coins: 50,
+      unlockedCharacters: [],
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.buyCharacter('guerrero_novato') // costs exactly 50
+
+    const putCall = db.players.put.mock.calls[0][0]
+    expect(putCall.coins).toBe(0)
+    expect(putCall.coins).toBeGreaterThanOrEqual(0)
   })
 })

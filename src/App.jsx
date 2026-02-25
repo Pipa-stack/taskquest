@@ -12,6 +12,8 @@ import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
+import CharacterShop from './components/CharacterShop.jsx'
+import CharacterCollection from './components/CharacterCollection.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -23,7 +25,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats']
+const TABS = ['Tasks', 'Rewards', 'Tienda', 'Stats']
 const SYNC_INTERVAL_MS = 15_000
 
 // Persist the selected date across reloads (falls back to today if stale)
@@ -102,7 +104,7 @@ function App() {
       const prevXp = playerXpRef.current
       const prevLevel = xpToLevel(prevXp)
 
-      const { xpEarned, newAchievements } = await completeTask(taskId)
+      const { xpEarned, coinsEarned, newAchievements } = await completeTask(taskId)
 
       if (xpEarned > 0) {
         const newLevel = xpToLevel(prevXp + xpEarned)
@@ -111,6 +113,10 @@ function App() {
           addNotification(`LEVEL UP! Ahora eres nivel ${newLevel} 🎉`)
         }
         addNotification(`+${xpEarned} XP`)
+      }
+
+      if (coinsEarned > 0) {
+        addNotification(`+${coinsEarned} 🪙`)
       }
 
       // Achievement notifications
@@ -204,6 +210,25 @@ function App() {
                   xp={player.xp}
                   rewardsUnlocked={player.rewardsUnlocked}
                   onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'Tienda' && (
+              <motion.div
+                key="tienda"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <CharacterShop
+                  coins={player.coins}
+                  unlockedCharacters={player.unlockedCharacters}
+                  onNotify={addNotification}
+                />
+                <CharacterCollection
+                  unlockedCharacters={player.unlockedCharacters}
                 />
               </motion.div>
             )}
