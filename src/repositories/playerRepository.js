@@ -12,6 +12,8 @@ export function playerToPayload(player) {
     lastActiveDate: player.lastActiveDate ?? null,
     dailyGoal: player.dailyGoal ?? 3,
     rewardsUnlocked: player.rewardsUnlocked ?? [],
+    unlockedCharacters: player.unlockedCharacters ?? [],
+    activeTeam: player.activeTeam ?? [],
     updatedAt: player.updatedAt,
   }
 }
@@ -80,6 +82,168 @@ export const playerRepository = {
    * @param {{ rewardId: string, costXP: number }} params
    * @returns {Promise<boolean>} true if the reward was unlocked, false if conditions not met
    */
+  /**
+   * Spends XP to unlock a character and enqueues a UPSERT_PLAYER outbox entry.
+   * Validates that the player has sufficient XP and hasn't already unlocked the character.
+   * Runs in a single atomic transaction.
+   *
+   * @param {{ characterId: string, costXP: number }} params
+   * @returns {Promise<boolean>} true if unlocked, false if conditions not met
+   */
+  async spendXpOnCharacter({ characterId, costXP }) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        unlockedCharacters: [],
+      }
+      const alreadyUnlocked = (player.unlockedCharacters ?? []).includes(characterId)
+      if (alreadyUnlocked || player.xp < costXP) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        xp: Math.max(0, player.xp - costXP),
+        unlockedCharacters: [...(player.unlockedCharacters ?? []), characterId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Replaces the active team with the given array of character ids.
+   * Validates: array, max 3 items, all ids must be in unlockedCharacters.
+   * Idempotent: saving the same team again is a no-op in effect but still persists.
+   *
+   * @param {string[]} teamIds
+   * @returns {Promise<boolean>} true on success, false if validation fails
+   */
+  async setActiveTeam(teamIds) {
+    if (!Array.isArray(teamIds)) return false
+    if (teamIds.length > 3) return false
+
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, unlockedCharacters: [] }
+      const unlocked = player.unlockedCharacters ?? []
+      if (teamIds.some((id) => !unlocked.includes(id))) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        activeTeam: teamIds,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Adds a character to the active team if not already present and there is room.
+   * - If already in team → no-op, returns true (idempotent).
+   * - If team is full (3) → returns false.
+   * - If character not unlocked → returns false.
+   *
+   * @param {string} characterId
+   * @returns {Promise<boolean>}
+   */
+  async addToTeam(characterId) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, unlockedCharacters: [], activeTeam: [] }
+      const unlocked = player.unlockedCharacters ?? []
+      const team = player.activeTeam ?? []
+
+      if (!unlocked.includes(characterId)) return
+      if (team.includes(characterId)) { success = true; return }
+      if (team.length >= 3) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        activeTeam: [...team, characterId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Removes a character from the active team.
+   * If not in team → no-op, returns true (idempotent).
+   *
+   * @param {string} characterId
+   * @returns {Promise<boolean>}
+   */
+  async removeFromTeam(characterId) {
+    const now = new Date().toISOString()
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, activeTeam: [] }
+      const team = player.activeTeam ?? []
+      if (!team.includes(characterId)) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        activeTeam: team.filter((id) => id !== characterId),
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
+
+    return true
+  },
+
   async spendXpOnReward({ rewardId, costXP }) {
     const now = new Date().toISOString()
     let success = false

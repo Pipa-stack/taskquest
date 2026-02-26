@@ -13,6 +13,8 @@ const DEFAULT = {
   dailyGoal: 3,
   achievementsUnlocked: [],
   rewardsUnlocked: [],
+  unlockedCharacters: [],
+  activeTeam: [],
   syncStatus: null,
 }
 
@@ -36,6 +38,8 @@ export function usePlayer() {
     dailyGoal: player.dailyGoal ?? 3,
     achievementsUnlocked: player.achievementsUnlocked ?? [],
     rewardsUnlocked: player.rewardsUnlocked ?? [],
+    unlockedCharacters: player.unlockedCharacters ?? [],
+    activeTeam: player.activeTeam ?? [],
     syncStatus: player.syncStatus ?? null,
   }
 }

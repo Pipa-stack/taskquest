@@ -48,9 +48,17 @@ import { getDeviceId } from '../lib/deviceId.js'
  *   updatedAt  – ISO timestamp for sync conflict resolution
  *   syncStatus – 'pending' | 'synced' | 'error' (offline-first indicator)
  *
- * NOTE for PR11: player_state remote table will gain unlocked_characters jsonb
- * to support Character Drops when completing tasks. The local players table
- * will also gain an unlockedCharacters field at that point.
+ * Schema v5
+ * ---------
+ * players gains:
+ *   unlockedCharacters – string[] of unlocked character ids (default [])
+ *   activeTeam         – string[] of up to 3 character ids in active team (default [])
+ *
+ * Supabase (run manually, not from code):
+ *   alter table public.player_state
+ *     add column if not exists unlocked_characters jsonb not null default '[]'::jsonb;
+ *   alter table public.player_state
+ *     add column if not exists active_team jsonb not null default '[]'::jsonb;
  */
 const db = new Dexie('taskquest')
 
@@ -96,6 +104,17 @@ db.version(4).stores({
   return tx.players.toCollection().modify((player) => {
     if (!player.updatedAt) player.updatedAt = now
     if (!player.syncStatus) player.syncStatus = 'pending'
+  })
+})
+
+db.version(5).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (!player.unlockedCharacters) player.unlockedCharacters = []
+    if (!player.activeTeam) player.activeTeam = []
   })
 })
 
