@@ -12,6 +12,7 @@ import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
+import CharacterCollection from './components/CharacterCollection.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -23,7 +24,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección']
 const SYNC_INTERVAL_MS = 15_000
 
 // Persist the selected date across reloads (falls back to today if stale)
@@ -219,6 +220,23 @@ function App() {
                 <StatsTab streak={player.streak} />
               </motion.div>
             )}
+
+            {activeTab === 'Colección' && (
+              <motion.div
+                key="collection"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <CharacterCollection
+                  xp={player.xp}
+                  unlockedCharacters={player.unlockedCharacters}
+                  activeTeam={player.activeTeam}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
 
@@ -231,6 +249,7 @@ function App() {
             combo={player.combo}
             dailyGoal={player.dailyGoal}
             syncStatus={player.syncStatus}
+            activeTeam={player.activeTeam}
           />
         </aside>
       </div>

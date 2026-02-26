@@ -47,6 +47,8 @@ describe('playerToPayload', () => {
       lastActiveDate: '2024-06-01',
       dailyGoal: 5,
       rewardsUnlocked: ['r1', 'r2'],
+      unlockedCharacters: [],
+      activeTeam: [],
       updatedAt: '2024-06-01T10:00:00.000Z',
     })
     expect(payload).not.toHaveProperty('combo')
@@ -208,5 +210,207 @@ describe('playerRepository.enqueueUpsert', () => {
     expect(entry.payload.streak).toBe(5)
     expect(entry.payload.dailyGoal).toBe(4)
     expect(entry.payload.rewardsUnlocked).toEqual(['r1'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – activeTeam + unlockedCharacters
+// ---------------------------------------------------------------------------
+describe('playerToPayload – new fields', () => {
+  it('includes unlockedCharacters and activeTeam in payload', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: ['warrior', 'mage'],
+      activeTeam: ['warrior'],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+    }
+    const payload = playerToPayload(player)
+    expect(payload.unlockedCharacters).toEqual(['warrior', 'mage'])
+    expect(payload.activeTeam).toEqual(['warrior'])
+  })
+
+  it('defaults unlockedCharacters and activeTeam to [] when missing', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.unlockedCharacters).toEqual([])
+    expect(payload.activeTeam).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.setActiveTeam
+// ---------------------------------------------------------------------------
+describe('playerRepository.setActiveTeam', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 500,
+    rewardsUnlocked: [],
+    unlockedCharacters: ['warrior', 'mage', 'ranger'],
+    activeTeam: [],
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+
+  it('sets the active team when all ids are unlocked', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.setActiveTeam(['warrior', 'mage'])
+
+    expect(ok).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.activeTeam).toEqual(['warrior', 'mage'])
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('rejects a team with more than 3 members', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, unlockedCharacters: ['warrior', 'mage', 'ranger', 'healer'] })
+
+    const ok = await playerRepository.setActiveTeam(['warrior', 'mage', 'ranger', 'healer'])
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('rejects if input is not an array', async () => {
+    const ok = await playerRepository.setActiveTeam('warrior')
+    expect(ok).toBe(false)
+  })
+
+  it('rejects if any character is not in unlockedCharacters', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, unlockedCharacters: ['warrior'] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.setActiveTeam(['warrior', 'mage'])
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('enqueues UPSERT_PLAYER with activeTeam in payload', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.setActiveTeam(['warrior'])
+
+    const outboxEntry = db.outbox.add.mock.calls[0][0]
+    expect(outboxEntry.payload.activeTeam).toEqual(['warrior'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.addToTeam
+// ---------------------------------------------------------------------------
+describe('playerRepository.addToTeam', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 500,
+    rewardsUnlocked: [],
+    unlockedCharacters: ['warrior', 'mage', 'ranger'],
+    activeTeam: ['warrior'],
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+
+  it('adds a character to the team and enqueues UPSERT_PLAYER', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.addToTeam('mage')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.activeTeam).toContain('warrior')
+    expect(put.activeTeam).toContain('mage')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+  })
+
+  it('is idempotent: adding a character already in team returns true without writing', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.addToTeam('warrior')
+
+    expect(ok).toBe(true)
+    // No write should happen since character is already present
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('rejects if character is not unlocked', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, unlockedCharacters: ['warrior'] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.addToTeam('mage')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('rejects when team already has 3 members', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      unlockedCharacters: ['warrior', 'mage', 'ranger', 'healer'],
+      activeTeam: ['warrior', 'mage', 'ranger'],
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.addToTeam('healer')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.removeFromTeam
+// ---------------------------------------------------------------------------
+describe('playerRepository.removeFromTeam', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 500,
+    rewardsUnlocked: [],
+    unlockedCharacters: ['warrior', 'mage'],
+    activeTeam: ['warrior', 'mage'],
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+
+  it('removes a character from the team and enqueues UPSERT_PLAYER', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.removeFromTeam('warrior')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.activeTeam).not.toContain('warrior')
+    expect(put.activeTeam).toContain('mage')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+  })
+
+  it('is idempotent: removing a character not in team does nothing', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, activeTeam: ['mage'] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.removeFromTeam('warrior')
+
+    expect(ok).toBe(true)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
   })
 })

@@ -971,3 +971,208 @@ ul {
     margin-bottom: 0.75rem;
   }
 }
+
+/* ── CharacterCollection ──────────────────────────────────────────── */
+.char-collection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Team section */
+.team-section {
+  background: #1a1a24;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.team-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a78bfa;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.team-slots {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.team-slot {
+  width: 64px;
+  height: 64px;
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  border: 2px dashed #3a3a50;
+  background: #111118;
+  position: relative;
+}
+
+.team-slot--filled {
+  border-color: #a78bfa;
+  background: #1e1a30;
+}
+
+.team-slot-emoji {
+  line-height: 1;
+}
+
+.team-slot-stage {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #a78bfa;
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+}
+
+.team-slot-plus {
+  font-size: 1.5rem;
+  color: #3a3a50;
+}
+
+/* Characters grid */
+.chars-grid-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chars-grid-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.chars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+
+.char-card {
+  background: #1a1a24;
+  border-radius: 0.75rem;
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  position: relative;
+  border: 1px solid #2a2a38;
+  transition: border-color 0.15s;
+}
+
+.char-card--unlocked {
+  border-color: #3a3a56;
+}
+
+.char-card--locked {
+  opacity: 0.65;
+}
+
+.char-card-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.char-card-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #c4c4d0;
+  text-align: center;
+}
+
+.char-in-team-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #a78bfa;
+  background: #2a1f4a;
+  border-radius: 999px;
+  padding: 0.1em 0.5em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.char-btn {
+  margin-top: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.4rem;
+  border: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 600;
+  width: 100%;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.char-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.char-btn--add {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.char-btn--add:hover:not(:disabled) {
+  background: #6366f1;
+}
+
+.char-btn--remove {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.char-btn--remove:hover {
+  background: #991b1b;
+}
+
+.char-btn--buy {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+}
+
+.char-btn--buy:hover:not(:disabled) {
+  background: #273449;
+}
+
+/* ── HUD Team (PlayerStats sidebar) ──────────────────────────────── */
+.hud-team {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.hud-team-label {
+  color: #9ca3af;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.hud-team-emojis {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.hud-team-emoji {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.hud-team-empty {
+  color: #4b5563;
+  font-size: 0.78rem;
+}

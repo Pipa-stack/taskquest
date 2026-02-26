@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { XP_PER_LEVEL } from '../domain/gamification.js'
+import { getCharacter } from '../domain/characters.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -7,9 +8,9 @@ import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
  * Displays player level, XP progress bar (animated), daily streak,
- * daily goal progress, and combo badge.
+ * daily goal progress, combo badge, and active team.
  */
-export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus }) {
+export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
@@ -96,6 +97,25 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
         />
       </div>
       <p className="xp-hint">{xpToNext} XP para nivel {level + 1}</p>
+
+      {/* Active Team */}
+      <div className="hud-team">
+        <span className="hud-team-label">Equipo:</span>
+        {activeTeam && activeTeam.length > 0 ? (
+          <span className="hud-team-emojis">
+            {activeTeam.map((id) => {
+              const char = getCharacter(id)
+              return char ? (
+                <span key={id} className="hud-team-emoji" title={char.name}>
+                  {char.emoji}
+                </span>
+              ) : null
+            })}
+          </span>
+        ) : (
+          <span className="hud-team-empty">0/3</span>
+        )}
+      </div>
 
       {/* Daily Goal */}
       <div className="daily-goal">
