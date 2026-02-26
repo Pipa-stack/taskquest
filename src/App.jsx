@@ -13,6 +13,7 @@ import RewardsShop from './components/RewardsShop.jsx'
 import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
 import CharacterCollection from './components/CharacterCollection.jsx'
+import BoostShop from './components/BoostShop.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -20,12 +21,14 @@ import db from './db/db.js'
 import { supabase } from './lib/supabase.js'
 import { pushOutbox, pullRemote } from './services/taskSyncService.js'
 import { pushPlayerOutbox, pullPlayerRemote } from './services/playerSyncService.js'
+import { playerRepository } from './repositories/playerRepository.js'
 import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts']
 const SYNC_INTERVAL_MS = 15_000
+const IDLE_TICK_INTERVAL_MS = 30_000
 
 // Persist the selected date across reloads (falls back to today if stale)
 function loadSelectedDate() {
@@ -81,6 +84,15 @@ function App() {
     const intervalId = setInterval(sync, SYNC_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [user])
+
+  // Idle tick loop: every 30 s, process idle earnings (works offline too)
+  useEffect(() => {
+    const tick = () => {
+      playerRepository.tickIdle(Date.now()).catch(console.warn)
+    }
+    const intervalId = setInterval(tick, IDLE_TICK_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [])
 
   const handleSelectDateKey = useCallback((dateKey) => {
     setSelectedDateKey(dateKey)
@@ -237,6 +249,22 @@ function App() {
                 />
               </motion.div>
             )}
+
+            {activeTab === 'Boosts' && (
+              <motion.div
+                key="boosts"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <BoostShop
+                  coins={player.coins}
+                  boosts={player.boosts}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
 
@@ -250,6 +278,12 @@ function App() {
             dailyGoal={player.dailyGoal}
             syncStatus={player.syncStatus}
             activeTeam={player.activeTeam}
+            coins={player.coins}
+            energy={player.energy}
+            energyCap={player.energyCap}
+            boosts={player.boosts}
+            coinsPerMinuteBase={player.coinsPerMinuteBase}
+            onNotify={addNotification}
           />
         </aside>
       </div>

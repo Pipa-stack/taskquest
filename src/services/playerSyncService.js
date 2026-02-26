@@ -54,6 +54,12 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         unlocked_characters: p.unlockedCharacters ?? [],
         active_team: p.activeTeam ?? [],
         updated_at: p.updatedAt,
+        coins: p.coins ?? 0,
+        energy: p.energy ?? 100,
+        energy_cap: p.energyCap ?? 100,
+        last_idle_tick_at: p.lastIdleTickAt ?? null,
+        boosts: p.boosts ?? [],
+        coins_per_minute_base: p.coinsPerMinuteBase ?? 1,
       }
 
       const { error } = await supabase
@@ -125,6 +131,12 @@ export async function pullPlayerRemote({ supabase, userId }) {
         activeTeam: data.active_team ?? [],
         updatedAt: data.updated_at,
         syncStatus: 'synced',
+        coins: data.coins ?? 0,
+        energy: data.energy ?? 100,
+        energyCap: data.energy_cap ?? 100,
+        lastIdleTickAt: data.last_idle_tick_at ?? null,
+        boosts: data.boosts ?? [],
+        coinsPerMinuteBase: data.coins_per_minute_base ?? 1,
       }
       await db.players.put(merged)
     }
