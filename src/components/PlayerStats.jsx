@@ -7,10 +7,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
- * Displays player level, XP progress bar (animated), daily streak,
+ * Displays player level, XP progress bar (animated), coins, daily streak,
  * daily goal progress, combo badge, and active team.
  */
-export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam }) {
+export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam, coins }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
@@ -74,6 +74,10 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
         <div className="stat">
           <span className="stat-label">XP Total</span>
           <span className="stat-value">{xp}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Monedas</span>
+          <span className="stat-value">🪙 {coins ?? 0}</span>
         </div>
         <div className="stat">
           <span className="stat-label">Racha</span>

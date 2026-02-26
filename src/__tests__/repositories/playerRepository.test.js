@@ -38,6 +38,8 @@ describe('playerToPayload', () => {
       combo: 1.2,
       lastCompleteAt: '2024-06-01T10:00:00.000Z',
       achievementsUnlocked: ['a1'],
+      coins: 42,
+      characterStages: { warrior: 2 },
       updatedAt: '2024-06-01T10:00:00.000Z',
     }
     const payload = playerToPayload(player)
@@ -49,6 +51,8 @@ describe('playerToPayload', () => {
       rewardsUnlocked: ['r1', 'r2'],
       unlockedCharacters: [],
       activeTeam: [],
+      coins: 42,
+      characterStages: { warrior: 2 },
       updatedAt: '2024-06-01T10:00:00.000Z',
     })
     expect(payload).not.toHaveProperty('combo')
@@ -63,6 +67,8 @@ describe('playerToPayload', () => {
     expect(payload.lastActiveDate).toBeNull()
     expect(payload.dailyGoal).toBe(3)
     expect(payload.rewardsUnlocked).toEqual([])
+    expect(payload.coins).toBe(0)
+    expect(payload.characterStages).toEqual({})
   })
 })
 
@@ -412,5 +418,198 @@ describe('playerRepository.removeFromTeam', () => {
     expect(ok).toBe(true)
     expect(db.players.put).not.toHaveBeenCalled()
     expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.buyCharacter
+// ---------------------------------------------------------------------------
+describe('playerRepository.buyCharacter', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 200,
+    rewardsUnlocked: [],
+    unlockedCharacters: [],
+    activeTeam: [],
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+
+  it('deducts coins and adds character to unlockedCharacters when affordable', async () => {
+    // 'warrior' costs 100 coins (uncommon)
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 200 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyCharacter('warrior')
+
+    expect(ok).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(100) // 200 - 100
+    expect(put.unlockedCharacters).toContain('warrior')
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+    expect(db.outbox.add.mock.calls[0][0].payload.coins).toBe(100)
+  })
+
+  it('returns false and does NOT update when coins are insufficient', async () => {
+    // 'warrior' costs 100, player only has 50
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 50 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyCharacter('warrior')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false and does NOT update when character is already unlocked', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 500, unlockedCharacters: ['warrior'] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyCharacter('warrior')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for an unknown character id', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 9999 })
+
+    const ok = await playerRepository.buyCharacter('nonexistent_char')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('coins do not go below 0 (safety guard)', async () => {
+    // 'peasant' costs 50 (common), player has exactly 50
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 50 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyCharacter('peasant')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.evolveCharacter
+// ---------------------------------------------------------------------------
+describe('playerRepository.evolveCharacter', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 500,
+    rewardsUnlocked: [],
+    unlockedCharacters: ['warrior', 'mage'],
+    activeTeam: [],
+    characterStages: {},
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+
+  it('deducts coins and advances characterStage from 1 to 2', async () => {
+    // 'warrior' is uncommon → evolutionCost = 60
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 200 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.evolveCharacter('warrior')
+
+    expect(ok).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(140) // 200 - 60
+    expect(put.characterStages.warrior).toBe(2)
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].payload.characterStages.warrior).toBe(2)
+  })
+
+  it('returns false when coins are insufficient', async () => {
+    // 'warrior' is uncommon → evolutionCost = 60
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 30 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.evolveCharacter('warrior')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false when character is already at max stage (2)', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      coins: 999,
+      characterStages: { warrior: 2 },
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.evolveCharacter('warrior')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('returns false when character is not unlocked', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 999, unlockedCharacters: [] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.evolveCharacter('warrior')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('returns false for an unknown character id', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 9999 })
+
+    const ok = await playerRepository.evolveCharacter('nonexistent_char')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – coins + characterStages
+// ---------------------------------------------------------------------------
+describe('playerToPayload – coins and characterStages', () => {
+  it('includes coins and characterStages in payload', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: ['warrior'],
+      activeTeam: ['warrior'],
+      coins: 75,
+      characterStages: { warrior: 2 },
+      updatedAt: '2024-06-01T10:00:00.000Z',
+    }
+    const payload = playerToPayload(player)
+    expect(payload.coins).toBe(75)
+    expect(payload.characterStages).toEqual({ warrior: 2 })
+  })
+
+  it('defaults coins to 0 and characterStages to {} when missing', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.coins).toBe(0)
+    expect(payload.characterStages).toEqual({})
   })
 })

@@ -6,6 +6,9 @@ import { localDateKey } from './dateKey.js'
 export const XP_PER_TASK = 100
 export const XP_PER_LEVEL = 500
 
+/** Coin rewards by task difficulty for non-clone tasks. */
+export const COIN_REWARDS = { easy: 5, medium: 8, hard: 12 }
+
 /**
  * Returns the XP reward for completing a task.
  * Clone tasks (anti-farming duplicates) always give 0 XP.
@@ -14,6 +17,18 @@ export const XP_PER_LEVEL = 500
  */
 export function taskXpReward(task) {
   return task.isClone ? 0 : XP_PER_TASK
+}
+
+/**
+ * Returns the coin reward for completing a task.
+ * Clone tasks always give 0 coins.
+ * Difficulty-based: hard=12, medium=8, default/easy=5.
+ * @param {{ isClone?: boolean, difficulty?: 'easy'|'medium'|'hard' }} task
+ * @returns {number}
+ */
+export function taskCoinReward(task) {
+  if (task.isClone) return 0
+  return COIN_REWARDS[task.difficulty] ?? COIN_REWARDS.easy
 }
 
 /**

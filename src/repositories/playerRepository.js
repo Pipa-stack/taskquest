@@ -1,4 +1,5 @@
 import db from '../db/db.js'
+import { getCharacter, getEvolutionCost } from '../domain/characters.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -14,6 +15,8 @@ export function playerToPayload(player) {
     rewardsUnlocked: player.rewardsUnlocked ?? [],
     unlockedCharacters: player.unlockedCharacters ?? [],
     activeTeam: player.activeTeam ?? [],
+    coins: player.coins ?? 0,
+    characterStages: player.characterStages ?? {},
     updatedAt: player.updatedAt,
   }
 }
@@ -24,9 +27,6 @@ export function playerToPayload(player) {
  *
  * Source of truth is always Dexie (offline-first). Sync is eventual via the
  * outbox pattern — UI is never blocked waiting for the network.
- *
- * PR11 will extend this with character-related mutations once the
- * unlocked_characters field is added to player_state.
  */
 export const playerRepository = {
   /**
@@ -75,22 +75,17 @@ export const playerRepository = {
   },
 
   /**
-   * Spends XP to unlock a reward and enqueues a UPSERT_PLAYER outbox entry.
-   * Validates that the player has sufficient XP and hasn't already unlocked the reward.
+   * Purchases a character with coins and enqueues a UPSERT_PLAYER outbox entry.
+   * Validates: character exists in catalog, not already purchased, coins sufficient.
    * Runs in a single atomic transaction.
    *
-   * @param {{ rewardId: string, costXP: number }} params
-   * @returns {Promise<boolean>} true if the reward was unlocked, false if conditions not met
+   * @param {string} characterId
+   * @returns {Promise<boolean>} true if purchased, false if conditions not met
    */
-  /**
-   * Spends XP to unlock a character and enqueues a UPSERT_PLAYER outbox entry.
-   * Validates that the player has sufficient XP and hasn't already unlocked the character.
-   * Runs in a single atomic transaction.
-   *
-   * @param {{ characterId: string, costXP: number }} params
-   * @returns {Promise<boolean>} true if unlocked, false if conditions not met
-   */
-  async spendXpOnCharacter({ characterId, costXP }) {
+  async buyCharacter(characterId) {
+    const char = getCharacter(characterId)
+    if (!char) return false
+
     const now = new Date().toISOString()
     let success = false
 
@@ -98,16 +93,74 @@ export const playerRepository = {
       const player = (await db.players.get(1)) ?? {
         id: 1,
         xp: 0,
+        coins: 0,
         unlockedCharacters: [],
       }
       const alreadyUnlocked = (player.unlockedCharacters ?? []).includes(characterId)
-      if (alreadyUnlocked || player.xp < costXP) return
+      const coins = player.coins ?? 0
+      if (alreadyUnlocked || coins < char.priceCoins) return
 
       const updated = {
         ...player,
         id: 1,
-        xp: Math.max(0, player.xp - costXP),
+        coins: Math.max(0, coins - char.priceCoins),
         unlockedCharacters: [...(player.unlockedCharacters ?? []), characterId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Evolves a character from Stage I to Stage II by spending coins.
+   * Validates: character exists, is unlocked, not already at max stage, coins sufficient.
+   * Evolution cost depends on character rarity (see EVOLUTION_COSTS).
+   * Runs in a single atomic transaction.
+   *
+   * @param {string} characterId
+   * @returns {Promise<boolean>} true if evolved, false if conditions not met
+   */
+  async evolveCharacter(characterId) {
+    const char = getCharacter(characterId)
+    if (!char) return false
+
+    const evolutionCost = getEvolutionCost(characterId)
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        coins: 0,
+        unlockedCharacters: [],
+        characterStages: {},
+      }
+      const unlocked = player.unlockedCharacters ?? []
+      if (!unlocked.includes(characterId)) return
+
+      const stages = player.characterStages ?? {}
+      const currentStage = stages[characterId] ?? 1
+      if (currentStage >= 2) return // already at max stage
+
+      const coins = player.coins ?? 0
+      if (coins < evolutionCost) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, coins - evolutionCost),
+        characterStages: { ...stages, [characterId]: currentStage + 1 },
         updatedAt: now,
         syncStatus: 'pending',
       }

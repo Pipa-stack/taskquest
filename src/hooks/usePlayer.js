@@ -15,6 +15,8 @@ const DEFAULT = {
   rewardsUnlocked: [],
   unlockedCharacters: [],
   activeTeam: [],
+  coins: 0,
+  characterStages: {},
   syncStatus: null,
 }
 
@@ -40,6 +42,8 @@ export function usePlayer() {
     rewardsUnlocked: player.rewardsUnlocked ?? [],
     unlockedCharacters: player.unlockedCharacters ?? [],
     activeTeam: player.activeTeam ?? [],
+    coins: player.coins ?? 0,
+    characterStages: player.characterStages ?? {},
     syncStatus: player.syncStatus ?? null,
   }
 }

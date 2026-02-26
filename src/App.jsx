@@ -103,7 +103,7 @@ function App() {
       const prevXp = playerXpRef.current
       const prevLevel = xpToLevel(prevXp)
 
-      const { xpEarned, newAchievements } = await completeTask(taskId)
+      const { xpEarned, coinsEarned, newAchievements } = await completeTask(taskId)
 
       if (xpEarned > 0) {
         const newLevel = xpToLevel(prevXp + xpEarned)
@@ -112,6 +112,10 @@ function App() {
           addNotification(`LEVEL UP! Ahora eres nivel ${newLevel} 🎉`)
         }
         addNotification(`+${xpEarned} XP`)
+      }
+
+      if (coinsEarned > 0) {
+        addNotification(`+${coinsEarned} 🪙`)
       }
 
       // Achievement notifications
@@ -230,9 +234,10 @@ function App() {
                 transition={{ duration: 0.18 }}
               >
                 <CharacterCollection
-                  xp={player.xp}
+                  coins={player.coins}
                   unlockedCharacters={player.unlockedCharacters}
                   activeTeam={player.activeTeam}
+                  characterStages={player.characterStages}
                   onNotify={addNotification}
                 />
               </motion.div>
@@ -250,6 +255,7 @@ function App() {
             dailyGoal={player.dailyGoal}
             syncStatus={player.syncStatus}
             activeTeam={player.activeTeam}
+            coins={player.coins}
           />
         </aside>
       </div>

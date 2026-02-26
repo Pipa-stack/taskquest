@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   taskXpReward,
+  taskCoinReward,
   xpToLevel,
   xpToNextLevel,
   calcUpdatedStreak,
   XP_PER_TASK,
   XP_PER_LEVEL,
+  COIN_REWARDS,
 } from '../../domain/gamification.js'
 
 // Fixed "now" for deterministic streak tests (LOCAL date = 2026-02-24)
@@ -22,6 +24,36 @@ describe('taskXpReward', () => {
 
   it('returns 0 for a clone task (anti-farming)', () => {
     expect(taskXpReward({ isClone: true })).toBe(0)
+  })
+})
+
+describe('taskCoinReward', () => {
+  it('returns COIN_REWARDS.easy (5) for a normal task with no difficulty', () => {
+    expect(taskCoinReward({ isClone: false })).toBe(COIN_REWARDS.easy)
+  })
+
+  it('returns COIN_REWARDS.easy when difficulty is undefined', () => {
+    expect(taskCoinReward({})).toBe(COIN_REWARDS.easy)
+  })
+
+  it('returns 0 for a clone task', () => {
+    expect(taskCoinReward({ isClone: true })).toBe(0)
+  })
+
+  it('returns COIN_REWARDS.medium (8) for medium difficulty', () => {
+    expect(taskCoinReward({ isClone: false, difficulty: 'medium' })).toBe(COIN_REWARDS.medium)
+  })
+
+  it('returns COIN_REWARDS.hard (12) for hard difficulty', () => {
+    expect(taskCoinReward({ isClone: false, difficulty: 'hard' })).toBe(COIN_REWARDS.hard)
+  })
+
+  it('returns COIN_REWARDS.easy for easy difficulty', () => {
+    expect(taskCoinReward({ isClone: false, difficulty: 'easy' })).toBe(COIN_REWARDS.easy)
+  })
+
+  it('clone task always returns 0 regardless of difficulty', () => {
+    expect(taskCoinReward({ isClone: true, difficulty: 'hard' })).toBe(0)
   })
 })
 

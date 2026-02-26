@@ -22,7 +22,7 @@ export function shouldOverwritePlayer(local, remote) {
  *
  * Remote table: player_state (1 row per user, upserted by user_id)
  * Synced fields: xp, streak, last_active_date, daily_goal, unlocked_rewards,
- *                unlocked_characters (empty until PR11), updated_at
+ *                unlocked_characters, active_team, coins, character_stages, updated_at
  *
  * On success: marks outbox item 'sent', marks player.syncStatus='synced'.
  * On failure: marks outbox item 'failed', increments retryCount, sets player.syncStatus='error'.
@@ -53,6 +53,8 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         unlocked_rewards: p.rewardsUnlocked ?? [],
         unlocked_characters: p.unlockedCharacters ?? [],
         active_team: p.activeTeam ?? [],
+        coins: p.coins ?? 0,
+        character_stages: p.characterStages ?? {},
         updated_at: p.updatedAt,
       }
 
@@ -123,6 +125,8 @@ export async function pullPlayerRemote({ supabase, userId }) {
         rewardsUnlocked: data.unlocked_rewards ?? [],
         unlockedCharacters: data.unlocked_characters ?? [],
         activeTeam: data.active_team ?? [],
+        coins: data.coins ?? 0,
+        characterStages: data.character_stages ?? {},
         updatedAt: data.updated_at,
         syncStatus: 'synced',
       }

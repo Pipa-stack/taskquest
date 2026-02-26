@@ -54,11 +54,21 @@ import { getDeviceId } from '../lib/deviceId.js'
  *   unlockedCharacters – string[] of unlocked character ids (default [])
  *   activeTeam         – string[] of up to 3 character ids in active team (default [])
  *
+ * Schema v6
+ * ---------
+ * players gains:
+ *   coins            – number of coins (currency for buying/evolving characters, default 0)
+ *   characterStages  – object mapping characterId → stage number (1 or 2, default {})
+ *
  * Supabase (run manually, not from code):
  *   alter table public.player_state
  *     add column if not exists unlocked_characters jsonb not null default '[]'::jsonb;
  *   alter table public.player_state
  *     add column if not exists active_team jsonb not null default '[]'::jsonb;
+ *   alter table public.player_state
+ *     add column if not exists coins bigint not null default 0;
+ *   alter table public.player_state
+ *     add column if not exists character_stages jsonb not null default '{}'::jsonb;
  */
 const db = new Dexie('taskquest')
 
@@ -115,6 +125,17 @@ db.version(5).stores({
   return tx.players.toCollection().modify((player) => {
     if (!player.unlockedCharacters) player.unlockedCharacters = []
     if (!player.activeTeam) player.activeTeam = []
+  })
+})
+
+db.version(6).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.coins === undefined) player.coins = 0
+    if (!player.characterStages) player.characterStages = {}
   })
 })
 

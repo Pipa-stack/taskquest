@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { isClone } from '../domain/antifarm.js'
-import { taskXpReward, calcUpdatedStreak } from '../domain/gamification.js'
+import { taskXpReward, taskCoinReward, calcUpdatedStreak } from '../domain/gamification.js'
 import { calcCombo, applyCombo } from '../domain/combo.js'
 import { checkNewAchievements } from '../domain/achievements.js'
 import { taskRepository } from '../repositories/taskRepository.js'
@@ -58,21 +58,23 @@ export function useTasks(selectedDate) {
   )
 
   /**
-   * Marks a task as done, awards XP with combo multiplier, updates streak,
+   * Marks a task as done, awards XP (with combo multiplier) and coins, updates streak,
    * and checks for newly unlocked achievements.
    * Also updates task.updatedAt / syncStatus and enqueues an outbox entry.
    *
    * Idempotent: silently no-ops if the task is already done.
-   * @returns {Promise<{ xpEarned: number, newAchievements: string[] }>}
+   * @returns {Promise<{ xpEarned: number, coinsEarned: number, newAchievements: string[] }>}
    */
   const completeTask = useCallback(async (taskId) => {
     const task = await db.tasks.get(taskId)
-    if (!task || task.status === 'done') return { xpEarned: 0, newAchievements: [] }
+    if (!task || task.status === 'done') return { xpEarned: 0, coinsEarned: 0, newAchievements: [] }
 
     const baseXp = taskXpReward(task)
+    const baseCoins = taskCoinReward(task)
     const now = new Date()
     const nowISO = now.toISOString()
     let xpEarned = 0
+    let coinsEarned = 0
     let newAchievements = []
 
     await db.transaction('rw', [db.tasks, db.players, db.outbox], async () => {
@@ -86,6 +88,7 @@ export function useTasks(selectedDate) {
       const player = (await db.players.get(1)) ?? {
         id: 1,
         xp: 0,
+        coins: 0,
         streak: 0,
         lastActiveDate: null,
         combo: 1.0,
@@ -101,6 +104,7 @@ export function useTasks(selectedDate) {
         : calcCombo(player.combo ?? 1.0, player.lastCompleteAt, now)
 
       xpEarned = applyCombo(baseXp, newCombo, task.isClone)
+      coinsEarned = baseCoins // coins are not affected by combo
 
       const streakUpdate = calcUpdatedStreak(player, now)
 
@@ -136,6 +140,7 @@ export function useTasks(selectedDate) {
         ...player,
         id: 1,
         xp: player.xp + xpEarned,
+        coins: (player.coins ?? 0) + coinsEarned,
         combo: newCombo,
         lastCompleteAt: nowISO,
         achievementsUnlocked: [...currentUnlocked, ...newAchievements],
@@ -167,7 +172,7 @@ export function useTasks(selectedDate) {
       await playerRepository.enqueueUpsert(updatedPlayer, nowISO)
     })
 
-    return { xpEarned, newAchievements }
+    return { xpEarned, coinsEarned, newAchievements }
   }, [today])
 
   return { tasks: tasks ?? [], addTask, completeTask, dateKey }
