@@ -77,7 +77,9 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
         </div>
         <div className="stat">
           <span className="stat-label">Racha</span>
-          <span className="stat-value">{streak} 🔥</span>
+          <span className="stat-value">
+            {streak} <span className="streak-fire">🔥</span>
+          </span>
         </div>
       </div>
 

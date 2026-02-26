@@ -15,7 +15,7 @@ export default function XpBurst({ xp, onDone }) {
       onAnimationComplete={onDone}
       aria-hidden="true"
     >
-      +{xp} XP
+      +{xp} XP 🪙
     </motion.span>
   )
 }

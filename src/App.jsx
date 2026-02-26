@@ -165,10 +165,10 @@ function App() {
             {activeTab === 'Tasks' && (
               <motion.div
                 key="tasks"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
               >
                 {/* Mobile toggle for calendar */}
                 <button
@@ -196,10 +196,10 @@ function App() {
             {activeTab === 'Rewards' && (
               <motion.div
                 key="rewards"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
               >
                 <RewardsShop
                   xp={player.xp}
@@ -212,10 +212,10 @@ function App() {
             {activeTab === 'Stats' && (
               <motion.div
                 key="stats"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
               >
                 <StatsTab streak={player.streak} />
               </motion.div>
@@ -224,10 +224,10 @@ function App() {
             {activeTab === 'Colección' && (
               <motion.div
                 key="collection"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.22, ease: 'easeInOut' }}
               >
                 <CharacterCollection
                   xp={player.xp}

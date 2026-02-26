@@ -1,5 +1,13 @@
+import { motion } from 'framer-motion'
 import { CHARACTERS } from '../domain/characters.js'
 import { playerRepository } from '../repositories/playerRepository.js'
+
+function getRarity(cost) {
+  if (cost >= 400) return 'legendary'
+  if (cost >= 300) return 'epic'
+  if (cost >= 200) return 'rare'
+  return 'common'
+}
 
 const MAX_TEAM = 3
 
@@ -73,14 +81,18 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
           {CHARACTERS.map((char) => {
             const isUnlocked = unlockedSet.has(char.id)
             const inTeam = teamSet.has(char.id)
+            const rarity = getRarity(char.cost)
 
             return (
-              <div
+              <motion.div
                 key={char.id}
-                className={`char-card ${isUnlocked ? 'char-card--unlocked' : 'char-card--locked'}`}
+                className={`char-card char-card--${rarity} ${isUnlocked ? '' : 'char-card--locked'}`}
+                whileHover={{ scale: 1.03 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 22 }}
               >
                 <div className="char-card-emoji">{char.emoji}</div>
                 <div className="char-card-name">{char.name}</div>
+                <span className="char-stage-badge">{char.stage}</span>
 
                 {inTeam && (
                   <span className="char-in-team-badge">En equipo</span>
@@ -113,7 +125,7 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
                     {char.cost} XP
                   </button>
                 )}
-              </div>
+              </motion.div>
             )
           })}
         </div>
