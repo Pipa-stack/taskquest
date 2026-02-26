@@ -22,6 +22,11 @@ const DEFAULT = {
   lastIdleTickAt: null,
   boosts: [],
   coinsPerMinuteBase: 1,
+  // gacha
+  shards: {},
+  dust: 0,
+  gachaHistory: [],
+  pityLegendary: 0,
 }
 
 /**
@@ -53,5 +58,10 @@ export function usePlayer() {
     lastIdleTickAt: player.lastIdleTickAt ?? null,
     boosts: player.boosts ?? [],
     coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
+    // gacha
+    shards: player.shards ?? {},
+    dust: player.dust ?? 0,
+    gachaHistory: player.gachaHistory ?? [],
+    pityLegendary: player.pityLegendary ?? 0,
   }
 }

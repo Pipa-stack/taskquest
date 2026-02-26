@@ -14,6 +14,7 @@ import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
 import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
+import GachaShop from './components/GachaShop.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -26,7 +27,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Gacha']
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -261,6 +262,24 @@ function App() {
                 <BoostShop
                   coins={player.coins}
                   boosts={player.boosts}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'Gacha' && (
+              <motion.div
+                key="gacha"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <GachaShop
+                  coins={player.coins}
+                  dust={player.dust}
+                  pityLegendary={player.pityLegendary}
+                  unlockedCharacters={player.unlockedCharacters}
                   onNotify={addNotification}
                 />
               </motion.div>

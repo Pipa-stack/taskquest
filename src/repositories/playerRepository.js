@@ -1,6 +1,7 @@
 import db from '../db/db.js'
 import { getBoost, getActiveBoosts, applyBoostsToCaps } from '../domain/boosts.js'
 import { computeIdleEarnings } from '../domain/idle.js'
+import { getPack, resolvePackPulls } from '../domain/gacha.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -23,6 +24,11 @@ export function playerToPayload(player) {
     lastIdleTickAt: player.lastIdleTickAt ?? null,
     boosts: player.boosts ?? [],
     coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
+    // gacha fields
+    shards: player.shards ?? {},
+    dust: player.dust ?? 0,
+    gachaHistory: player.gachaHistory ?? [],
+    pityLegendary: player.pityLegendary ?? 0,
   }
 }
 
@@ -374,6 +380,89 @@ export const playerRepository = {
    * @param {number} nowMs   – current timestamp in milliseconds
    * @returns {Promise<boolean>} true on success, false if insufficient coins or unknown boost
    */
+  /**
+   * Purchases a gacha pack using coins, resolves pulls, updates player state.
+   *
+   * - Validates coins >= pack cost.
+   * - Generates pulls using resolvePackPulls (pity-aware, Mega Pack guarantee).
+   * - New characters: added to unlockedCharacters.
+   * - Duplicates: dust added.
+   * - History capped at last 20 pulls.
+   * - Enqueues UPSERT_PLAYER outbox entry.
+   *
+   * @param {string} packId - id from PACK_CATALOG
+   * @param {number} nowMs  - current timestamp (Date.now())
+   * @returns {Promise<{ success: boolean, pulls: Array }>}
+   */
+  async buyPack(packId, nowMs) {
+    const pack = getPack(packId)
+    if (!pack) return { success: false, pulls: [] }
+
+    const nowISO = new Date(nowMs).toISOString()
+    let result = { success: false, pulls: [] }
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        unlockedCharacters: [],
+        dust: 0,
+        shards: {},
+        gachaHistory: [],
+        pityLegendary: 0,
+      }
+
+      if ((player.coins ?? 0) < pack.cost) return
+
+      const { pulls, newPityCounter } = resolvePackPulls({
+        packId,
+        pityCounter: player.pityLegendary ?? 0,
+        unlockedCharacters: player.unlockedCharacters ?? [],
+      })
+
+      // Aggregate dust gains and newly unlocked characters
+      let dustGained = 0
+      const newlyUnlocked = []
+      for (const pull of pulls) {
+        if (pull.isNew) {
+          newlyUnlocked.push(pull.characterId)
+        } else {
+          dustGained += pull.dustGained
+        }
+      }
+
+      // Cap gacha history at 20 entries
+      const pullsWithTimestamp = pulls.map((p) => ({ ...p, at: nowISO }))
+      const newHistory = [...(player.gachaHistory ?? []), ...pullsWithTimestamp].slice(-20)
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) - pack.cost),
+        unlockedCharacters: [...(player.unlockedCharacters ?? []), ...newlyUnlocked],
+        dust: (player.dust ?? 0) + dustGained,
+        shards: player.shards ?? {},
+        gachaHistory: newHistory,
+        pityLegendary: newPityCounter,
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+
+      result = { success: true, pulls }
+    })
+
+    return result
+  },
+
   async buyBoost(boostId, nowMs) {
     const boostDef = getBoost(boostId)
     if (!boostDef) return false

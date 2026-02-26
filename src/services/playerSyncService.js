@@ -60,6 +60,11 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         last_idle_tick_at: p.lastIdleTickAt ?? null,
         boosts: p.boosts ?? [],
         coins_per_minute_base: p.coinsPerMinuteBase ?? 1,
+        // gacha fields
+        shards: p.shards ?? {},
+        dust: p.dust ?? 0,
+        gacha_history: p.gachaHistory ?? [],
+        pity_legendary: p.pityLegendary ?? 0,
       }
 
       const { error } = await supabase
@@ -137,6 +142,11 @@ export async function pullPlayerRemote({ supabase, userId }) {
         lastIdleTickAt: data.last_idle_tick_at ?? null,
         boosts: data.boosts ?? [],
         coinsPerMinuteBase: data.coins_per_minute_base ?? 1,
+        // gacha fields
+        shards: data.shards ?? {},
+        dust: data.dust ?? 0,
+        gachaHistory: data.gacha_history ?? [],
+        pityLegendary: data.pity_legendary ?? 0,
       }
       await db.players.put(merged)
     }

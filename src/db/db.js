@@ -153,4 +153,33 @@ db.version(6).stores({
   })
 })
 
+/**
+ * Schema v7
+ * ---------
+ * players gains gacha/pack fields:
+ *   shards        – jsonb map { [characterId]: number } duplicate shards (default {})
+ *   dust          – bigint secondary currency from duplicates (default 0)
+ *   gachaHistory  – jsonb array of last 20 pull results (default [])
+ *   pityLegendary – int pull counter toward guaranteed legendary (default 0)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists shards jsonb not null default '{}'::jsonb,
+ *     add column if not exists dust bigint not null default 0,
+ *     add column if not exists gacha_history jsonb not null default '[]'::jsonb,
+ *     add column if not exists pity_legendary int not null default 0;
+ */
+db.version(7).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (!player.shards) player.shards = {}
+    if (player.dust === undefined) player.dust = 0
+    if (!player.gachaHistory) player.gachaHistory = []
+    if (player.pityLegendary === undefined) player.pityLegendary = 0
+  })
+})
+
 export default db

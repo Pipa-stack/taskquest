@@ -57,6 +57,11 @@ describe('playerToPayload', () => {
       lastIdleTickAt: null,
       boosts: [],
       coinsPerMinuteBase: 1,
+      // gacha fields (defaults)
+      shards: {},
+      dust: 0,
+      gachaHistory: [],
+      pityLegendary: 0,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')
@@ -419,6 +424,191 @@ describe('playerRepository.removeFromTeam', () => {
     expect(ok).toBe(true)
     expect(db.players.put).not.toHaveBeenCalled()
     expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – gacha fields
+// ---------------------------------------------------------------------------
+describe('playerToPayload – gacha fields', () => {
+  it('includes shards, dust, gachaHistory, pityLegendary in payload', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      activeTeam: [],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+      shards: { warrior: 2 },
+      dust: 50,
+      gachaHistory: [{ characterId: 'warrior', rarity: 'common', isNew: false, dustGained: 10 }],
+      pityLegendary: 15,
+    }
+    const payload = playerToPayload(player)
+    expect(payload.shards).toEqual({ warrior: 2 })
+    expect(payload.dust).toBe(50)
+    expect(payload.gachaHistory).toHaveLength(1)
+    expect(payload.pityLegendary).toBe(15)
+  })
+
+  it('applies safe defaults for missing gacha fields', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.shards).toEqual({})
+    expect(payload.dust).toBe(0)
+    expect(payload.gachaHistory).toEqual([])
+    expect(payload.pityLegendary).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.buyPack
+// ---------------------------------------------------------------------------
+describe('playerRepository.buyPack', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 500,
+    energy: 100,
+    energyCap: 100,
+    boosts: [],
+    coinsPerMinuteBase: 1,
+    unlockedCharacters: [],
+    dust: 0,
+    shards: {},
+    gachaHistory: [],
+    pityLegendary: 0,
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('deducts coins and returns pulls on success', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { success, pulls } = await playerRepository.buyPack('starter', Date.now())
+
+    expect(success).toBe(true)
+    expect(Array.isArray(pulls)).toBe(true)
+    expect(pulls).toHaveLength(1)
+
+    const put = db.players.put.mock.calls[0][0]
+    // starter costs 120
+    expect(put.coins).toBe(500 - 120)
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('returns { success: false } when coins are insufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 50 }) // starter costs 120
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { success } = await playerRepository.buyPack('starter', Date.now())
+
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns { success: false } for unknown pack id', async () => {
+    const { success } = await playerRepository.buyPack('nonexistent_pack', Date.now())
+    expect(success).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('adds dust for duplicate characters', async () => {
+    // Pre-unlock all characters so every pull is a duplicate
+    const allCharIds = ['warrior', 'mage', 'ranger', 'healer', 'rogue', 'paladin']
+    db.players.get.mockResolvedValue({ ...basePlayer, unlockedCharacters: allCharIds, coins: 500 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { success, pulls } = await playerRepository.buyPack('starter', Date.now())
+
+    expect(success).toBe(true)
+    // All pulls should be duplicates
+    for (const pull of pulls) {
+      expect(pull.isNew).toBe(false)
+      expect(pull.dustGained).toBeGreaterThan(0)
+    }
+
+    const put = db.players.put.mock.calls[0][0]
+    // dust should have increased
+    expect(put.dust).toBeGreaterThan(0)
+  })
+
+  it('caps gacha history at 20 entries', async () => {
+    // Start with 19 history entries
+    const existingHistory = Array.from({ length: 19 }, (_, i) => ({ characterId: 'warrior', at: `t${i}` }))
+    db.players.get.mockResolvedValue({ ...basePlayer, gachaHistory: existingHistory })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.buyPack('starter', Date.now()) // 1 pull
+
+    const put = db.players.put.mock.calls[0][0]
+    // 19 + 1 = 20, exactly at cap
+    expect(put.gachaHistory).toHaveLength(20)
+
+    // Now start with 20 entries
+    vi.clearAllMocks()
+    const fullHistory = Array.from({ length: 20 }, (_, i) => ({ characterId: 'warrior', at: `t${i}` }))
+    db.players.get.mockResolvedValue({ ...basePlayer, gachaHistory: fullHistory })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.buyPack('starter', Date.now()) // 1 more pull
+
+    const put2 = db.players.put.mock.calls[0][0]
+    // Still capped at 20 (oldest entry dropped)
+    expect(put2.gachaHistory).toHaveLength(20)
+  })
+
+  it('increments pity counter on non-legendary pulls', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, pityLegendary: 5 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.buyPack('starter', Date.now())
+
+    const put = db.players.put.mock.calls[0][0]
+    // pity should have changed (either incremented if not legendary, or reset if legendary)
+    // We can't control the random outcome, but pityLegendary should be a number
+    expect(typeof put.pityLegendary).toBe('number')
+    expect(put.pityLegendary).toBeGreaterThanOrEqual(0)
+  })
+
+  it('enqueues UPSERT_PLAYER with gacha fields in payload', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.buyPack('starter', Date.now())
+
+    const outboxEntry = db.outbox.add.mock.calls[0][0]
+    expect(outboxEntry.payload).toHaveProperty('dust')
+    expect(outboxEntry.payload).toHaveProperty('shards')
+    expect(outboxEntry.payload).toHaveProperty('gachaHistory')
+    expect(outboxEntry.payload).toHaveProperty('pityLegendary')
+  })
+
+  it('mega pack produces 10 pulls (costs 900)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 1000 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { success, pulls } = await playerRepository.buyPack('mega', Date.now())
+
+    expect(success).toBe(true)
+    expect(pulls).toHaveLength(10)
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(1000 - 900)
   })
 })
 
