@@ -14,6 +14,8 @@ import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
 import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
+import FarmHUD from './components/FarmHUD.jsx'
+import TeamPanel from './components/TeamPanel.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -26,7 +28,18 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts']
+// Base | Tasks | Boosts | Tienda | Stats | Colección
+const TABS = ['Base', 'Tasks', 'Boosts', 'Tienda', 'Stats', 'Colección']
+
+const TAB_ICONS = {
+  Base:      '🏠',
+  Tasks:     '✅',
+  Boosts:    '🚀',
+  Tienda:    '🏪',
+  Stats:     '📊',
+  Colección: '👥',
+}
+
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -34,11 +47,8 @@ const IDLE_TICK_INTERVAL_MS = 30_000
 function loadSelectedDate() {
   try {
     const stored = localStorage.getItem('selectedDateKey')
-    // Validate format before trusting it
     if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored
-  } catch (_) {
-    // localStorage unavailable (e.g. private browsing restrictions)
-  }
+  } catch (_) {}
   return todayKey()
 }
 
@@ -52,7 +62,7 @@ function App() {
   const player = usePlayer()
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState('Tasks')
+  const [activeTab, setActiveTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
 
@@ -126,7 +136,6 @@ function App() {
         addNotification(`+${xpEarned} XP`)
       }
 
-      // Achievement notifications
       for (const id of newAchievements) {
         const achievement = getAchievement(id)
         if (achievement) {
@@ -141,12 +150,16 @@ function App() {
 
   const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
 
+  // Base tab: full-width (no sidebar). Tasks tab: main + sidebar.
+  const hasSidebar = activeTab === 'Tasks'
+
   return (
     <div className="app">
+      {/* ── Compact header ── */}
       <header className="app-header">
         <h1 className="app-title">TaskQuest</h1>
         <div className="app-header-right">
-          <p className="app-date">Hoy · {today}</p>
+          <span className="app-date">{today}</span>
           {isSyncing && (
             <span className="sync-indicator" title="Sincronizando con la nube…">
               ☁ syncing…
@@ -155,7 +168,7 @@ function App() {
         </div>
       </header>
 
-      {/* Tab navigation */}
+      {/* ── Tab navigation ── */}
       <nav className="tabs-nav" role="tablist">
         {TABS.map((tab) => (
           <button
@@ -165,15 +178,75 @@ function App() {
             className={`tab-btn ${activeTab === tab ? 'tab-active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab}
+            <span className="tab-icon" aria-hidden="true">{TAB_ICONS[tab]}</span>
+            <span className="tab-label">{tab}</span>
           </button>
         ))}
       </nav>
 
-      {/* Desktop: 2-column layout. Mobile: stacked */}
-      <div className="app-layout">
+      {/* ── Layout: full-width or main+sidebar ── */}
+      <div className={`app-layout${hasSidebar ? ' has-sidebar' : ''}`}>
         <main className="app-main">
           <AnimatePresence mode="wait">
+
+            {/* ── Base (idle farming home) ── */}
+            {activeTab === 'Base' && (
+              <motion.div
+                key="base"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+                className="base-tab"
+              >
+                <FarmHUD
+                  coins={player.coins}
+                  energy={player.energy}
+                  energyCap={player.energyCap}
+                  boosts={player.boosts}
+                  coinsPerMinuteBase={player.coinsPerMinuteBase}
+                  onNotify={addNotification}
+                />
+
+                <div className="base-bottom-grid">
+                  <TeamPanel
+                    activeTeam={player.activeTeam}
+                    onNavigate={setActiveTab}
+                  />
+
+                  {/* Quick actions */}
+                  <div className="quick-actions">
+                    <h3 className="quick-actions-title">Acción rápida</h3>
+                    <TaskForm onAdd={addTask} />
+                    <div className="quick-links">
+                      <button
+                        className="quick-link-btn"
+                        onClick={() => setActiveTab('Boosts')}
+                        type="button"
+                      >
+                        🚀 Boosts
+                      </button>
+                      <button
+                        className="quick-link-btn"
+                        onClick={() => setActiveTab('Tienda')}
+                        type="button"
+                      >
+                        🏪 Tienda
+                      </button>
+                      <button
+                        className="quick-link-btn"
+                        onClick={() => setActiveTab('Colección')}
+                        type="button"
+                      >
+                        👥 Colección
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Tasks ── */}
             {activeTab === 'Tasks' && (
               <motion.div
                 key="tasks"
@@ -182,7 +255,7 @@ function App() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18 }}
               >
-                {/* Mobile toggle for calendar */}
+                {/* Calendar toggle — always visible */}
                 <button
                   className="mc-toggle-btn"
                   onClick={() => setCalendarOpen((o) => !o)}
@@ -191,7 +264,6 @@ function App() {
                   📅 Calendario {calendarOpen ? '▲' : '▼'}
                 </button>
 
-                {/* Calendar wrapper: always visible on desktop, togglable on mobile */}
                 <div className={`mc-wrapper${calendarOpen ? ' mc-open' : ''}`}>
                   <MiniCalendar
                     selectedDateKey={selectedDateKey}
@@ -205,9 +277,27 @@ function App() {
               </motion.div>
             )}
 
-            {activeTab === 'Rewards' && (
+            {/* ── Boosts ── */}
+            {activeTab === 'Boosts' && (
               <motion.div
-                key="rewards"
+                key="boosts"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <BoostShop
+                  coins={player.coins}
+                  boosts={player.boosts}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
+            {/* ── Tienda (Rewards shop) ── */}
+            {activeTab === 'Tienda' && (
+              <motion.div
+                key="tienda"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
@@ -221,6 +311,7 @@ function App() {
               </motion.div>
             )}
 
+            {/* ── Stats ── */}
             {activeTab === 'Stats' && (
               <motion.div
                 key="stats"
@@ -233,6 +324,7 @@ function App() {
               </motion.div>
             )}
 
+            {/* ── Colección ── */}
             {activeTab === 'Colección' && (
               <motion.div
                 key="collection"
@@ -250,42 +342,30 @@ function App() {
               </motion.div>
             )}
 
-            {activeTab === 'Boosts' && (
-              <motion.div
-                key="boosts"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
-                <BoostShop
-                  coins={player.coins}
-                  boosts={player.boosts}
-                  onNotify={addNotification}
-                />
-              </motion.div>
-            )}
           </AnimatePresence>
         </main>
 
-        <aside className="app-sidebar">
-          <PlayerStats
-            xp={player.xp}
-            level={player.level}
-            streak={player.streak}
-            xpToNext={player.xpToNext}
-            combo={player.combo}
-            dailyGoal={player.dailyGoal}
-            syncStatus={player.syncStatus}
-            activeTeam={player.activeTeam}
-            coins={player.coins}
-            energy={player.energy}
-            energyCap={player.energyCap}
-            boosts={player.boosts}
-            coinsPerMinuteBase={player.coinsPerMinuteBase}
-            onNotify={addNotification}
-          />
-        </aside>
+        {/* Sidebar: only shown on Tasks tab */}
+        {hasSidebar && (
+          <aside className="app-sidebar">
+            <PlayerStats
+              xp={player.xp}
+              level={player.level}
+              streak={player.streak}
+              xpToNext={player.xpToNext}
+              combo={player.combo}
+              dailyGoal={player.dailyGoal}
+              syncStatus={player.syncStatus}
+              activeTeam={player.activeTeam}
+              coins={player.coins}
+              energy={player.energy}
+              energyCap={player.energyCap}
+              boosts={player.boosts}
+              coinsPerMinuteBase={player.coinsPerMinuteBase}
+              onNotify={addNotification}
+            />
+          </aside>
+        )}
       </div>
 
       <LevelUpOverlay

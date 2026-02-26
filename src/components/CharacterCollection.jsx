@@ -78,9 +78,11 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
               <div
                 key={char.id}
                 className={`char-card ${isUnlocked ? 'char-card--unlocked' : 'char-card--locked'}`}
+                data-rarity={char.rarity}
               >
                 <div className="char-card-emoji">{char.emoji}</div>
                 <div className="char-card-name">{char.name}</div>
+                <span className="char-rarity-label" data-rarity={char.rarity}>{char.rarity}</span>
 
                 {inTeam && (
                   <span className="char-in-team-badge">En equipo</span>
