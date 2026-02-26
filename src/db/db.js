@@ -118,4 +118,39 @@ db.version(5).stores({
   })
 })
 
+/**
+ * Schema v6
+ * ---------
+ * players gains idle-farming fields:
+ *   coins              – passive currency earned via idle ticks (default 0)
+ *   energy             – consumed 1 per idle minute; replenishes over time (default 100)
+ *   energyCap          – maximum energy (default 100; can be boosted)
+ *   lastIdleTickAt     – ISO timestamp of last idle tick (nullable)
+ *   boosts             – array of active boost objects { id, expiresAt?, coinMultiplier?, energyCapBonus? }
+ *   coinsPerMinuteBase – base rate before team and boost multipliers (default 1)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists coins int not null default 0,
+ *     add column if not exists energy int not null default 100,
+ *     add column if not exists energy_cap int not null default 100,
+ *     add column if not exists last_idle_tick_at timestamptz,
+ *     add column if not exists boosts jsonb not null default '[]'::jsonb,
+ *     add column if not exists coins_per_minute_base int not null default 1;
+ */
+db.version(6).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.coins === undefined) player.coins = 0
+    if (player.energy === undefined) player.energy = 100
+    if (player.energyCap === undefined) player.energyCap = 100
+    if (player.lastIdleTickAt === undefined) player.lastIdleTickAt = null
+    if (!player.boosts) player.boosts = []
+    if (player.coinsPerMinuteBase === undefined) player.coinsPerMinuteBase = 1
+  })
+})
+
 export default db

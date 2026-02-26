@@ -1,4 +1,6 @@
 import db from '../db/db.js'
+import { getBoost, getActiveBoosts, applyBoostsToCaps } from '../domain/boosts.js'
+import { computeIdleEarnings } from '../domain/idle.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -15,6 +17,12 @@ export function playerToPayload(player) {
     unlockedCharacters: player.unlockedCharacters ?? [],
     activeTeam: player.activeTeam ?? [],
     updatedAt: player.updatedAt,
+    coins: player.coins ?? 0,
+    energy: player.energy ?? 100,
+    energyCap: player.energyCap ?? 100,
+    lastIdleTickAt: player.lastIdleTickAt ?? null,
+    boosts: player.boosts ?? [],
+    coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
   }
 }
 
@@ -270,6 +278,156 @@ export const playerRepository = {
       await db.players.put(updated)
       await db.outbox.add({
         createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Processes one idle tick: computes earnings since last tick, adds coins,
+   * decreases energy, and updates lastIdleTickAt. Enqueues UPSERT_PLAYER.
+   *
+   * - Uses computeIdleEarnings for the math (pure domain function).
+   * - Active boosts are filtered before passing to computeIdleEarnings.
+   * - A team multiplier of 1.0 is used here; callers can pre-compute it
+   *   using calcTeamMultiplier and pass it via the `multiplier` field on player
+   *   if desired — but for simplicity the repository uses 1.0 as default.
+   *   The actual team multiplier is computed in the UI layer and can be passed
+   *   as an optional param.
+   *
+   * @param {number} nowMs – current timestamp in milliseconds (e.g. Date.now())
+   * @param {number} [teamMultiplier=1] – pre-computed team multiplier
+   * @returns {Promise<{ coinsEarned: number, minutesUsed: number }>}
+   */
+  async tickIdle(nowMs, teamMultiplier = 1) {
+    const nowISO = new Date(nowMs).toISOString()
+    let result = { coinsEarned: 0, minutesUsed: 0 }
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        energy: 100,
+        energyCap: 100,
+        lastIdleTickAt: null,
+        boosts: [],
+        coinsPerMinuteBase: 1,
+      }
+
+      const storedBoosts = player.boosts ?? []
+      const activeBoosts = getActiveBoosts(storedBoosts, nowMs)
+      const effectiveEnergyCap = applyBoostsToCaps(player.energyCap ?? 100, activeBoosts)
+
+      const earnings = computeIdleEarnings({
+        now: nowMs,
+        lastTickAt: player.lastIdleTickAt != null ? new Date(player.lastIdleTickAt).getTime() : null,
+        energy: player.energy ?? 100,
+        energyCap: effectiveEnergyCap,
+        baseCpm: player.coinsPerMinuteBase ?? 1,
+        multiplier: teamMultiplier,
+        activeBoosts,
+      })
+
+      result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed }
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) + earnings.coinsEarned),
+        energy: earnings.newEnergy,
+        // Prune expired boosts to keep the array tidy
+        boosts: activeBoosts,
+        lastIdleTickAt: new Date(earnings.newLastTickAt).toISOString(),
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
+
+    return result
+  },
+
+  /**
+   * Purchases a boost and applies it to the player.
+   *
+   * - Validates that the player has enough coins.
+   * - For timed boosts: creates an entry in player.boosts with expiresAt.
+   *   Cap boosts (energyCapBonus) are deduplicated: buying again extends the timer.
+   * - For instant boosts (energy_refill): immediately sets energy = energyCap.
+   * - Enqueues UPSERT_PLAYER outbox entry.
+   *
+   * @param {string} boostId – id from BOOST_CATALOG
+   * @param {number} nowMs   – current timestamp in milliseconds
+   * @returns {Promise<boolean>} true on success, false if insufficient coins or unknown boost
+   */
+  async buyBoost(boostId, nowMs) {
+    const boostDef = getBoost(boostId)
+    if (!boostDef) return false
+
+    const nowISO = new Date(nowMs).toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        energy: 100,
+        energyCap: 100,
+        boosts: [],
+        coinsPerMinuteBase: 1,
+      }
+
+      const currentCoins = player.coins ?? 0
+      if (currentCoins < boostDef.cost) return
+
+      let newBoosts = [...(player.boosts ?? [])]
+      let newEnergy = player.energy ?? 100
+      const newEnergyCap = player.energyCap ?? 100
+
+      if (boostDef.instant) {
+        // energy_refill: fill up to the effective cap (including active bonuses)
+        const activeBoosts = getActiveBoosts(newBoosts, nowMs)
+        const effectiveCap = applyBoostsToCaps(newEnergyCap, activeBoosts)
+        newEnergy = effectiveCap
+      } else {
+        const expiresAt = nowMs + boostDef.durationMs
+        // Deduplicate: remove any existing entry for same boost id before adding
+        newBoosts = newBoosts.filter((b) => b.id !== boostId)
+        newBoosts.push({
+          id: boostId,
+          expiresAt,
+          ...(boostDef.coinMultiplier != null && { coinMultiplier: boostDef.coinMultiplier }),
+          ...(boostDef.energyCapBonus != null && { energyCapBonus: boostDef.energyCapBonus }),
+        })
+      }
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, currentCoins - boostDef.cost),
+        energy: newEnergy,
+        boosts: newBoosts,
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
         status: 'pending',
         type: 'UPSERT_PLAYER',
         payload: playerToPayload(updated),

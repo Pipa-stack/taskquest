@@ -16,6 +16,12 @@ const DEFAULT = {
   unlockedCharacters: [],
   activeTeam: [],
   syncStatus: null,
+  coins: 0,
+  energy: 100,
+  energyCap: 100,
+  lastIdleTickAt: null,
+  boosts: [],
+  coinsPerMinuteBase: 1,
 }
 
 /**
@@ -41,5 +47,11 @@ export function usePlayer() {
     unlockedCharacters: player.unlockedCharacters ?? [],
     activeTeam: player.activeTeam ?? [],
     syncStatus: player.syncStatus ?? null,
+    coins: player.coins ?? 0,
+    energy: player.energy ?? 100,
+    energyCap: player.energyCap ?? 100,
+    lastIdleTickAt: player.lastIdleTickAt ?? null,
+    boosts: player.boosts ?? [],
+    coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
   }
 }

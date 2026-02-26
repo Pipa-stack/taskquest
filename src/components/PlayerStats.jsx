@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { XP_PER_LEVEL } from '../domain/gamification.js'
 import { getCharacter } from '../domain/characters.js'
+import { getActiveBoosts, applyBoostsToCaps, getBoost } from '../domain/boosts.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -8,9 +9,13 @@ import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
  * Displays player level, XP progress bar (animated), daily streak,
- * daily goal progress, combo badge, and active team.
+ * daily goal progress, combo badge, active team, and idle farming stats.
  */
-export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam }) {
+export default function PlayerStats({
+  xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam,
+  coins, energy, energyCap, boosts, coinsPerMinuteBase,
+  onNotify,
+}) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
@@ -28,9 +33,31 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
 
   const showCombo = combo > 1.0
 
+  // Idle farming derived values
+  const nowMs = Date.now()
+  const activeBoostList = getActiveBoosts(boosts ?? [], nowMs)
+  const effectiveEnergyCap = applyBoostsToCaps(energyCap ?? 100, activeBoostList)
+  const energyPct = effectiveEnergyCap > 0 ? Math.round(((energy ?? 100) / effectiveEnergyCap) * 100) : 100
+
+  // Find the active coin boost with the highest multiplier (for display)
+  const activeCoinBoost = activeBoostList
+    .filter((b) => b.coinMultiplier)
+    .sort((a, b) => b.coinMultiplier - a.coinMultiplier)[0] ?? null
+
   const handleGoalChange = async (e) => {
     const newGoal = Number(e.target.value)
     await playerRepository.setDailyGoal(newGoal)
+  }
+
+  const handleTickIdle = async () => {
+    const { coinsEarned } = await playerRepository.tickIdle(Date.now())
+    if (onNotify) {
+      if (coinsEarned > 0) {
+        onNotify(`+${coinsEarned} monedas reclamadas`)
+      } else {
+        onNotify('Sin monedas que reclamar (sin energía o muy pronto)')
+      }
+    }
   }
 
   return (
@@ -97,6 +124,68 @@ export default function PlayerStats({ xp, level, streak, xpToNext, combo, dailyG
         />
       </div>
       <p className="xp-hint">{xpToNext} XP para nivel {level + 1}</p>
+
+      {/* Idle farming section */}
+      <div className="idle-section">
+        {/* Coins */}
+        <div className="idle-row">
+          <span className="idle-label">🪙 Monedas:</span>
+          <span className="idle-value">{coins ?? 0}</span>
+        </div>
+        <div className="idle-row">
+          <span className="idle-label">Monedas/min:</span>
+          <span className="idle-value">
+            {coinsPerMinuteBase ?? 1}
+            {activeCoinBoost && (
+              <span className="boost-active-badge"> ×{activeCoinBoost.coinMultiplier}</span>
+            )}
+          </span>
+        </div>
+
+        {/* Energy bar */}
+        <div className="idle-energy">
+          <div className="idle-energy-header">
+            <span className="idle-label">⚡ Energía:</span>
+            <span className="idle-value">{Math.floor(energy ?? 100)}/{effectiveEnergyCap}</span>
+          </div>
+          <div
+            className="energy-bar-wrap"
+            role="progressbar"
+            aria-valuenow={energyPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Energía: ${Math.floor(energy ?? 100)} de ${effectiveEnergyCap}`}
+          >
+            <motion.div
+              className="energy-bar"
+              animate={{ width: `${energyPct}%` }}
+              transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+            />
+          </div>
+        </div>
+
+        {/* Active boost display */}
+        {activeCoinBoost && (() => {
+          const boostDef = getBoost(activeCoinBoost.id)
+          const remainingMs = activeCoinBoost.expiresAt - nowMs
+          const remainingMin = Math.max(0, Math.ceil(remainingMs / 60_000))
+          return (
+            <div className="boost-active-info">
+              🚀 {boostDef?.label ?? activeCoinBoost.id} — {remainingMin}m restantes
+            </div>
+          )
+        })()}
+
+        {/* Claim idle button */}
+        <button
+          className="idle-claim-btn"
+          onClick={handleTickIdle}
+          type="button"
+          title="Reclamar monedas acumuladas desde el último tick"
+        >
+          Reclamar idle
+        </button>
+      </div>
 
       {/* Active Team */}
       <div className="hud-team">

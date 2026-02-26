@@ -50,6 +50,13 @@ describe('playerToPayload', () => {
       unlockedCharacters: [],
       activeTeam: [],
       updatedAt: '2024-06-01T10:00:00.000Z',
+      // idle farming fields (defaults because not set on test player above)
+      coins: 0,
+      energy: 100,
+      energyCap: 100,
+      lastIdleTickAt: null,
+      boosts: [],
+      coinsPerMinuteBase: 1,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')
@@ -412,5 +419,229 @@ describe('playerRepository.removeFromTeam', () => {
     expect(ok).toBe(true)
     expect(db.players.put).not.toHaveBeenCalled()
     expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – idle farming fields
+// ---------------------------------------------------------------------------
+describe('playerToPayload – idle fields', () => {
+  it('includes all idle farming fields in the payload', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      activeTeam: [],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+      coins: 42,
+      energy: 80,
+      energyCap: 100,
+      lastIdleTickAt: '2024-06-01T09:00:00.000Z',
+      boosts: [{ id: 'coin_x2_30m', expiresAt: 9999999999999 }],
+      coinsPerMinuteBase: 2,
+    }
+    const payload = playerToPayload(player)
+    expect(payload.coins).toBe(42)
+    expect(payload.energy).toBe(80)
+    expect(payload.energyCap).toBe(100)
+    expect(payload.lastIdleTickAt).toBe('2024-06-01T09:00:00.000Z')
+    expect(payload.boosts).toHaveLength(1)
+    expect(payload.coinsPerMinuteBase).toBe(2)
+  })
+
+  it('applies safe defaults for missing idle fields', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.coins).toBe(0)
+    expect(payload.energy).toBe(100)
+    expect(payload.energyCap).toBe(100)
+    expect(payload.lastIdleTickAt).toBeNull()
+    expect(payload.boosts).toEqual([])
+    expect(payload.coinsPerMinuteBase).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.tickIdle
+// ---------------------------------------------------------------------------
+describe('playerRepository.tickIdle', () => {
+  const NOW_MS = 1_700_000_060_000 // 1 minute after tick below
+  const LAST_TICK = 1_700_000_000_000 // 60 seconds before NOW_MS
+
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 0,
+    energy: 100,
+    energyCap: 100,
+    lastIdleTickAt: new Date(LAST_TICK).toISOString(),
+    boosts: [],
+    coinsPerMinuteBase: 1,
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('adds coins and consumes energy proportional to elapsed time', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { coinsEarned, minutesUsed } = await playerRepository.tickIdle(NOW_MS)
+
+    expect(coinsEarned).toBeGreaterThan(0)
+    expect(minutesUsed).toBeCloseTo(1, 0)
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBeGreaterThan(0)
+    expect(put.energy).toBeLessThan(100)
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('earns zero coins when energy is 0', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, energy: 0 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { coinsEarned } = await playerRepository.tickIdle(NOW_MS)
+
+    expect(coinsEarned).toBe(0)
+    // Still writes to update lastIdleTickAt and prune boosts
+    expect(db.players.put).toHaveBeenCalledOnce()
+  })
+
+  it('earns zero coins on first tick (lastIdleTickAt is null)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, lastIdleTickAt: null })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { coinsEarned } = await playerRepository.tickIdle(NOW_MS)
+
+    expect(coinsEarned).toBe(0)
+  })
+
+  it('coins never go below 0 even on edge cases', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 0, energy: 0 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.tickIdle(NOW_MS)
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBeGreaterThanOrEqual(0)
+  })
+
+  it('uses the teamMultiplier parameter', async () => {
+    // 1 minute elapsed, baseCpm=1, multiplier=2 → 2 coins
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const { coinsEarned } = await playerRepository.tickIdle(NOW_MS, 2)
+
+    // At least 1 coin with multiplier 2 for ~1 minute
+    expect(coinsEarned).toBeGreaterThanOrEqual(1)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.buyBoost
+// ---------------------------------------------------------------------------
+describe('playerRepository.buyBoost', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 500,
+    energy: 50,
+    energyCap: 100,
+    boosts: [],
+    coinsPerMinuteBase: 1,
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+  const NOW_MS = 1_700_000_000_000
+
+  it('deducts coins and adds timed boost when player has enough coins', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyBoost('coin_x2_30m', NOW_MS)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(500 - 120) // cost 120
+    expect(put.boosts).toHaveLength(1)
+    expect(put.boosts[0].id).toBe('coin_x2_30m')
+    expect(put.boosts[0].expiresAt).toBeGreaterThan(NOW_MS)
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('returns false and does not write when coins are insufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 50 }) // cost 120
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyBoost('coin_x2_30m', NOW_MS)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for an unknown boost id', async () => {
+    const ok = await playerRepository.buyBoost('nonexistent_boost', NOW_MS)
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('applies instant energy_refill boost immediately (no duration stored)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 200 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyBoost('energy_refill', NOW_MS)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    // energy should be refilled to energyCap (100)
+    expect(put.energy).toBe(100)
+    expect(put.coins).toBe(200 - 90) // cost 90
+  })
+
+  it('deduplicates timed boosts: buying same boost replaces the old one', async () => {
+    const existingBoost = { id: 'coin_x2_30m', expiresAt: NOW_MS + 60_000, coinMultiplier: 2 }
+    db.players.get.mockResolvedValue({ ...basePlayer, boosts: [existingBoost] })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyBoost('coin_x2_30m', NOW_MS)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    // Should still be only 1 boost (dedup)
+    expect(put.boosts).toHaveLength(1)
+    // New expiresAt should be further in the future than the old one
+    expect(put.boosts[0].expiresAt).toBeGreaterThan(existingBoost.expiresAt)
+  })
+
+  it('coins never go below 0', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 90 }) // exact cost for energy_refill
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.buyBoost('energy_refill', NOW_MS)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBe(0)
   })
 })
