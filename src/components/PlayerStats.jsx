@@ -14,7 +14,8 @@ import { playerRepository } from '../repositories/playerRepository.js'
 export default function PlayerStats({
   xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam,
   coins, energy, energyCap, boosts, coinsPerMinuteBase,
-  onNotify,
+  currentZone, powerScore,
+  onNotify, onNavigateToMap,
 }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
@@ -185,6 +186,26 @@ export default function PlayerStats({
         >
           Reclamar idle
         </button>
+      </div>
+
+      {/* Zone & Power info */}
+      <div className="hud-zone-row">
+        <span className="hud-zone-label">
+          📍 Zona <strong>{currentZone ?? 1}</strong>
+        </span>
+        <span className="hud-power-label">
+          ⚡ <strong>{powerScore ?? 0}</strong> power
+        </span>
+        {onNavigateToMap && (
+          <button
+            className="hud-map-btn"
+            onClick={onNavigateToMap}
+            type="button"
+            title="Abrir mapa de zonas"
+          >
+            🗺️ Mapa
+          </button>
+        )}
       </div>
 
       {/* Active Team */}

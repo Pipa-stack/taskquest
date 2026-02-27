@@ -57,6 +57,11 @@ describe('playerToPayload', () => {
       lastIdleTickAt: null,
       boosts: [],
       coinsPerMinuteBase: 1,
+      // zone meta-game fields (defaults)
+      currentZone: 1,
+      zoneUnlockedMax: 1,
+      zoneProgress: {},
+      powerScoreCache: 0,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')
@@ -643,5 +648,250 @@ describe('playerRepository.buyBoost', () => {
     expect(ok).toBe(true)
     const put = db.players.put.mock.calls[0][0]
     expect(put.coins).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – zone meta-game fields
+// ---------------------------------------------------------------------------
+describe('playerToPayload – zone fields', () => {
+  it('includes zone fields with explicit values', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      activeTeam: [],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+      currentZone: 3,
+      zoneUnlockedMax: 3,
+      zoneProgress: { 1: { claimedRewards: ['z1_q1'] } },
+      powerScoreCache: 55,
+    }
+    const payload = playerToPayload(player)
+    expect(payload.currentZone).toBe(3)
+    expect(payload.zoneUnlockedMax).toBe(3)
+    expect(payload.zoneProgress).toEqual({ 1: { claimedRewards: ['z1_q1'] } })
+    expect(payload.powerScoreCache).toBe(55)
+  })
+
+  it('applies safe defaults for missing zone fields', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.currentZone).toBe(1)
+    expect(payload.zoneUnlockedMax).toBe(1)
+    expect(payload.zoneProgress).toEqual({})
+    expect(payload.powerScoreCache).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.setCurrentZone
+// ---------------------------------------------------------------------------
+describe('playerRepository.setCurrentZone', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 0,
+    currentZone: 1,
+    zoneUnlockedMax: 3,
+    zoneProgress: {},
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('sets currentZone when the zone is already unlocked', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.setCurrentZone(2)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.currentZone).toBe(2)
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('returns false when the zone is beyond zoneUnlockedMax', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, zoneUnlockedMax: 2 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.setCurrentZone(3)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for an unknown zone id', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+
+    const ok = await playerRepository.setCurrentZone(99)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.unlockZone
+// ---------------------------------------------------------------------------
+describe('playerRepository.unlockZone', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 1000,
+    currentZone: 1,
+    zoneUnlockedMax: 1,
+    coinsPerMinuteBase: 1,
+    zoneProgress: {},
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('unlocks the next zone when power and coins are sufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    // zone 2 requires power=20, cost=50 coins
+    const ok = await playerRepository.unlockZone(2, 20)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.zoneUnlockedMax).toBe(2)
+    expect(put.currentZone).toBe(2)
+    expect(put.coins).toBe(1000 - 50) // zone 2 costs 50
+    expect(put.coinsPerMinuteBase).toBeGreaterThan(1) // zone 2 bonus
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('returns false when power score is insufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    // zone 2 requires power=20; we pass 19
+    const ok = await playerRepository.unlockZone(2, 19)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false when coins are insufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 10 }) // zone 2 costs 50
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.unlockZone(2, 20)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('returns false when trying to skip zones (non-sequential)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.unlockZone(3, 999) // zoneUnlockedMax=1, skip to 3
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.claimZoneQuest
+// ---------------------------------------------------------------------------
+describe('playerRepository.claimZoneQuest', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    coins: 100,
+    currentZone: 1,
+    zoneUnlockedMax: 1,
+    zoneProgress: {},
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('claims the quest, adds coins, and records it in zoneProgress', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const reward = await playerRepository.claimZoneQuest(1, 'z1_q1')
+
+    expect(reward).toBeTruthy()
+    expect(reward.coins).toBeGreaterThan(0)
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.coins).toBeGreaterThan(100) // coins increased
+    expect(put.zoneProgress[1].claimedRewards).toContain('z1_q1')
+    expect(put.syncStatus).toBe('pending')
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    expect(db.outbox.add.mock.calls[0][0].type).toBe('UPSERT_PLAYER')
+  })
+
+  it('returns false and does NOT update when quest is already claimed', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      zoneProgress: { 1: { claimedRewards: ['z1_q1'] } },
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const reward = await playerRepository.claimZoneQuest(1, 'z1_q1')
+
+    expect(reward).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false for an unknown quest id', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+
+    const reward = await playerRepository.claimZoneQuest(1, 'nonexistent_quest')
+
+    expect(reward).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('accumulates multiple claimed quests in the same zone', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      zoneProgress: { 1: { claimedRewards: ['z1_q1'] } },
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const reward = await playerRepository.claimZoneQuest(1, 'z1_q2')
+
+    expect(reward).toBeTruthy()
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.zoneProgress[1].claimedRewards).toContain('z1_q1')
+    expect(put.zoneProgress[1].claimedRewards).toContain('z1_q2')
+  })
+
+  it('creates zoneProgress entry for the zone if it did not exist', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, zoneProgress: {} })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.claimZoneQuest(2, 'z2_q3')
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.zoneProgress[2]).toBeDefined()
+    expect(put.zoneProgress[2].claimedRewards).toContain('z2_q3')
   })
 })

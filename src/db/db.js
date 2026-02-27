@@ -153,4 +153,33 @@ db.version(6).stores({
   })
 })
 
+/**
+ * Schema v7
+ * ---------
+ * players gains zone meta-game fields:
+ *   currentZone      – current active zone id (default 1)
+ *   zoneUnlockedMax  – highest zone unlocked (default 1)
+ *   zoneProgress     – { [zoneId]: { claimedRewards: string[] } } (default {})
+ *   powerScoreCache  – cached power score, recalculable from team (default 0)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists current_zone int not null default 1,
+ *     add column if not exists zone_unlocked_max int not null default 1,
+ *     add column if not exists zone_progress jsonb not null default '{}'::jsonb,
+ *     add column if not exists power_score_cache int not null default 0;
+ */
+db.version(7).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.currentZone === undefined) player.currentZone = 1
+    if (player.zoneUnlockedMax === undefined) player.zoneUnlockedMax = 1
+    if (player.zoneProgress === undefined) player.zoneProgress = {}
+    if (player.powerScoreCache === undefined) player.powerScoreCache = 0
+  })
+})
+
 export default db
