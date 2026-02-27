@@ -30,12 +30,13 @@ const STAGE_MULT = {
 /**
  * Computes the power score for the active team.
  *
- * @param {string[]} activeTeam       – array of character ids (max 3)
- * @param {object}  characterStages   – { [characterId]: 1 | 2 | 3 }; defaults stage 1 for missing
- * @param {object[]} catalog          – character catalog (array of { id, rarity })
- * @returns {number} integer power score (sum of top-3 individual scores)
+ * @param {string[]} activeTeam        – array of character ids (max 3)
+ * @param {object}  characterStages    – { [characterId]: 1 | 2 | 3 }; defaults stage 1 for missing
+ * @param {object[]} catalog           – character catalog (array of { id, rarity })
+ * @param {number}  globalMultiplier   – prestige global multiplier (default 1)
+ * @returns {number} integer power score (sum of top-3 individual scores × globalMultiplier)
  */
-export function computePowerScore(activeTeam, characterStages, catalog) {
+export function computePowerScore(activeTeam, characterStages, catalog, globalMultiplier = 1) {
   if (!Array.isArray(activeTeam) || activeTeam.length === 0) return 0
 
   const scores = activeTeam.map((id) => {
@@ -49,5 +50,5 @@ export function computePowerScore(activeTeam, characterStages, catalog) {
 
   // Take top 3 (team already capped at 3 but sort defensively)
   const top3 = [...scores].sort((a, b) => b - a).slice(0, 3)
-  return top3.reduce((sum, v) => sum + v, 0)
+  return Math.round(top3.reduce((sum, v) => sum + v, 0) * globalMultiplier)
 }

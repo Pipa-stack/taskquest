@@ -15,6 +15,7 @@ import MiniCalendar from './components/MiniCalendar.jsx'
 import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
+import PrestigePanel from './components/PrestigePanel.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -29,7 +30,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa', 'Ascensión']
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -66,10 +67,10 @@ function App() {
     0
   )
 
-  // Pre-compute power score from active team (changes when team composition changes)
+  // Pre-compute power score from active team (changes when team or global multiplier changes)
   const powerScore = useMemo(
-    () => computePowerScore(player.activeTeam ?? [], {}, CHARACTERS),
-    [player.activeTeam]
+    () => computePowerScore(player.activeTeam ?? [], {}, CHARACTERS, player.globalMultiplierCache ?? 1),
+    [player.activeTeam, player.globalMultiplierCache]
   )
 
   // Keep a ref of current XP so handleComplete can read it synchronously
@@ -286,6 +287,23 @@ function App() {
                 <ZonesMap
                   player={player}
                   powerScore={powerScore}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'Ascensión' && (
+              <motion.div
+                key="ascension"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <PrestigePanel
+                  player={player}
+                  powerScore={powerScore}
+                  currentZone={player.currentZone ?? 1}
                   onNotify={addNotification}
                 />
               </motion.div>

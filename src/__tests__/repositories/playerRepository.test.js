@@ -62,6 +62,10 @@ describe('playerToPayload', () => {
       zoneUnlockedMax: 1,
       zoneProgress: {},
       powerScoreCache: 0,
+      // prestige/ascension fields (defaults)
+      essence: 0,
+      prestigeCount: 0,
+      globalMultiplierCache: 1,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')
@@ -893,5 +897,170 @@ describe('playerRepository.claimZoneQuest', () => {
     const put = db.players.put.mock.calls[0][0]
     expect(put.zoneProgress[2]).toBeDefined()
     expect(put.zoneProgress[2].claimedRewards).toContain('z2_q3')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – prestige/ascension fields
+// ---------------------------------------------------------------------------
+describe('playerToPayload – prestige fields', () => {
+  it('includes prestige fields with explicit values', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      activeTeam: [],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+      essence: 15,
+      prestigeCount: 3,
+      globalMultiplierCache: 1.30,
+    }
+    const payload = playerToPayload(player)
+    expect(payload.essence).toBe(15)
+    expect(payload.prestigeCount).toBe(3)
+    expect(payload.globalMultiplierCache).toBeCloseTo(1.30)
+  })
+
+  it('applies safe defaults for missing prestige fields', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.essence).toBe(0)
+    expect(payload.prestigeCount).toBe(0)
+    expect(payload.globalMultiplierCache).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.prestige
+// ---------------------------------------------------------------------------
+describe('playerRepository.prestige', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 5000,
+    streak: 7,
+    coins: 999,
+    energy: 50,
+    energyCap: 100,
+    coinsPerMinuteBase: 5,
+    currentZone: 6,
+    zoneUnlockedMax: 6,
+    zoneProgress: { 1: { claimedRewards: ['z1_q1'] } },
+    essence: 0,
+    prestigeCount: 0,
+    globalMultiplierCache: 1,
+    unlockedCharacters: ['warrior'],
+    activeTeam: ['warrior'],
+    rewardsUnlocked: [],
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('performs prestige when eligible (zone 6, power >= 250)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.prestige(300, 6)
+
+    expect(ok).toBe(true)
+    expect(db.players.put).toHaveBeenCalledOnce()
+    const put = db.players.put.mock.calls[0][0]
+
+    // Reset fields
+    expect(put.coins).toBe(0)
+    expect(put.currentZone).toBe(1)
+    expect(put.zoneUnlockedMax).toBe(1)
+    expect(put.zoneProgress).toEqual({})
+    expect(put.coinsPerMinuteBase).toBe(1)
+    expect(put.energy).toBe(100) // refilled to energyCap
+
+    // Prestige progress
+    expect(put.prestigeCount).toBe(1)
+    expect(put.essence).toBe(6) // floor(300 / 50) = 6
+    expect(put.globalMultiplierCache).toBeCloseTo(1 + 6 * 0.02)
+
+    // Preserved fields
+    expect(put.xp).toBe(5000)
+    expect(put.streak).toBe(7)
+    expect(put.unlockedCharacters).toContain('warrior')
+
+    // Sync fields
+    expect(put.syncStatus).toBe('pending')
+    expect(put.updatedAt).toBeDefined()
+
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    const outbox = db.outbox.add.mock.calls[0][0]
+    expect(outbox.type).toBe('UPSERT_PLAYER')
+    expect(outbox.payload.essence).toBe(6)
+    expect(outbox.payload.prestigeCount).toBe(1)
+  })
+
+  it('returns false when zone is insufficient (< 6)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, currentZone: 5, zoneUnlockedMax: 5 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.prestige(300, 5)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false when power is insufficient (< 250)', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.prestige(249, 6)
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('accumulates essence across multiple prestiges', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, essence: 6, prestigeCount: 1 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.prestige(250, 6)
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    // floor(250/50) = 5, 6 + 5 = 11
+    expect(put.essence).toBe(11)
+    expect(put.prestigeCount).toBe(2)
+    expect(put.globalMultiplierCache).toBeCloseTo(1 + 11 * 0.02)
+  })
+
+  it('globalMultiplierCache reflects total essence after prestige', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.prestige(500, 6) // floor(500/50) = 10 essence
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.essence).toBe(10)
+    expect(put.globalMultiplierCache).toBeCloseTo(1.20) // 1 + 10 * 0.02
+  })
+
+  it('enqueues UPSERT_PLAYER with prestige fields in payload', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.prestige(300, 6)
+
+    const outbox = db.outbox.add.mock.calls[0][0]
+    expect(outbox.payload.essence).toBeGreaterThan(0)
+    expect(outbox.payload.prestigeCount).toBe(1)
+    expect(outbox.payload.globalMultiplierCache).toBeGreaterThan(1)
+    expect(outbox.payload.coins).toBe(0)
+    expect(outbox.payload.currentZone).toBe(1)
   })
 })

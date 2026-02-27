@@ -26,6 +26,9 @@ const DEFAULT = {
   zoneUnlockedMax: 1,
   zoneProgress: {},
   powerScoreCache: 0,
+  essence: 0,
+  prestigeCount: 0,
+  globalMultiplierCache: 1,
 }
 
 /**
@@ -61,5 +64,8 @@ export function usePlayer() {
     zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
     zoneProgress: player.zoneProgress ?? {},
     powerScoreCache: player.powerScoreCache ?? 0,
+    essence: player.essence ?? 0,
+    prestigeCount: player.prestigeCount ?? 0,
+    globalMultiplierCache: player.globalMultiplierCache ?? 1,
   }
 }

@@ -3,6 +3,7 @@ import { getBoost, getActiveBoosts, applyBoostsToCaps } from '../domain/boosts.j
 import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
+import { canPrestige, computeEssenceGain, applyPrestige } from '../domain/prestige.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -29,6 +30,9 @@ export function playerToPayload(player) {
     zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
     zoneProgress: player.zoneProgress ?? {},
     powerScoreCache: player.powerScoreCache ?? 0,
+    essence: player.essence ?? 0,
+    prestigeCount: player.prestigeCount ?? 0,
+    globalMultiplierCache: player.globalMultiplierCache ?? 1,
   }
 }
 
@@ -339,6 +343,7 @@ export const playerRepository = {
         baseCpm: player.coinsPerMinuteBase ?? 1,
         multiplier: teamMultiplier,
         activeBoosts,
+        globalMultiplier: player.globalMultiplierCache ?? 1,
       })
 
       result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed }
@@ -591,5 +596,70 @@ export const playerRepository = {
     })
 
     return reward
+  },
+
+  /**
+   * Performs a prestige (ascension): validates eligibility, resets progression,
+   * and grants Essence + updates the global multiplier cache.
+   *
+   * Requirements (via canPrestige):
+   *   - currentZone >= 6
+   *   - powerScore >= 250
+   *
+   * On success:
+   *   - coins, zoneProgress, coinsPerMinuteBase reset
+   *   - currentZone and zoneUnlockedMax reset to 1
+   *   - energy refilled to energyCap
+   *   - prestigeCount incremented
+   *   - essence += computeEssenceGain(powerScore)
+   *   - globalMultiplierCache recalculated
+   *   - UPSERT_PLAYER enqueued for sync
+   *
+   * @param {number} powerScore  – current computed power score
+   * @param {number} currentZone – current zone id (for canPrestige check)
+   * @returns {Promise<boolean>} true on success, false if conditions not met
+   */
+  async prestige(powerScore, currentZone) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        energy: 100,
+        energyCap: 100,
+        coinsPerMinuteBase: 1,
+        currentZone: 1,
+        zoneUnlockedMax: 1,
+        zoneProgress: {},
+        essence: 0,
+        prestigeCount: 0,
+        globalMultiplierCache: 1,
+      }
+
+      if (!canPrestige(player, powerScore, currentZone)) return
+
+      const essenceGain = computeEssenceGain(powerScore)
+      const prestiged = applyPrestige(player, essenceGain)
+      const updated = {
+        ...prestiged,
+        id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
   },
 }

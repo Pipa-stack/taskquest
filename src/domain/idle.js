@@ -68,17 +68,18 @@ export function calcTeamMultiplier(activeTeam, characterStages, charactersCatalo
  *  - newLastTickAt = now (always updated, even if energy = 0).
  *
  * @param {{
- *   now:          number,   – current timestamp (ms)
- *   lastTickAt:   number|null, – previous tick timestamp (ms), null = first tick
- *   energy:       number,   – current energy
- *   energyCap:    number,   – maximum energy (unused here, for context)
- *   baseCpm:      number,   – base coins per minute
- *   multiplier:   number,   – team multiplier (from calcTeamMultiplier)
- *   activeBoosts: Array,    – active boost objects (with coinMultiplier field)
+ *   now:             number,      – current timestamp (ms)
+ *   lastTickAt:      number|null, – previous tick timestamp (ms), null = first tick
+ *   energy:          number,      – current energy
+ *   energyCap:       number,      – maximum energy (unused here, for context)
+ *   baseCpm:         number,      – base coins per minute
+ *   multiplier:      number,      – team multiplier (from calcTeamMultiplier)
+ *   activeBoosts:    Array,       – active boost objects (with coinMultiplier field)
+ *   globalMultiplier: number,     – prestige global multiplier (default 1)
  * }} params
  * @returns {{ coinsEarned: number, minutesUsed: number, newEnergy: number, newLastTickAt: number }}
  */
-export function computeIdleEarnings({ now, lastTickAt, energy, energyCap, baseCpm, multiplier, activeBoosts }) {
+export function computeIdleEarnings({ now, lastTickAt, energy, energyCap, baseCpm, multiplier, activeBoosts, globalMultiplier = 1 }) {
   const newLastTickAt = now
 
   if (!lastTickAt) {
@@ -101,7 +102,7 @@ export function computeIdleEarnings({ now, lastTickAt, energy, energyCap, baseCp
     ? Math.max(...activeBoosts.map((b) => b.coinMultiplier ?? 1))
     : 1
 
-  const coinsEarned = Math.floor(minutesUsed * baseCpm * multiplier * boostMultiplier)
+  const coinsEarned = Math.floor(minutesUsed * baseCpm * multiplier * boostMultiplier * globalMultiplier)
   const newEnergy = Math.max(0, energy - minutesUsed)
 
   return { coinsEarned, minutesUsed, newEnergy, newLastTickAt }
