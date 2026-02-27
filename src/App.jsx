@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useTasks } from './hooks/useTasks.js'
@@ -14,9 +14,12 @@ import StatsTab from './components/StatsTab.jsx'
 import MiniCalendar from './components/MiniCalendar.jsx'
 import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
+import ZonesMap from './components/ZonesMap.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
+import { computePowerScore } from './domain/power.js'
+import { CHARACTERS } from './domain/characters.js'
 import db from './db/db.js'
 import { supabase } from './lib/supabase.js'
 import { pushOutbox, pullRemote } from './services/taskSyncService.js'
@@ -26,7 +29,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts']
+const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa']
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -61,6 +64,12 @@ function App() {
     () => db.outbox.where('status').equals('pending').count(),
     [],
     0
+  )
+
+  // Pre-compute power score from active team (changes when team composition changes)
+  const powerScore = useMemo(
+    () => computePowerScore(player.activeTeam ?? [], {}, CHARACTERS),
+    [player.activeTeam]
   )
 
   // Keep a ref of current XP so handleComplete can read it synchronously
@@ -265,6 +274,22 @@ function App() {
                 />
               </motion.div>
             )}
+
+            {activeTab === 'Mapa' && (
+              <motion.div
+                key="mapa"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <ZonesMap
+                  player={player}
+                  powerScore={powerScore}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
 
@@ -283,7 +308,10 @@ function App() {
             energyCap={player.energyCap}
             boosts={player.boosts}
             coinsPerMinuteBase={player.coinsPerMinuteBase}
+            currentZone={player.currentZone}
+            powerScore={powerScore}
             onNotify={addNotification}
+            onNavigateToMap={() => setActiveTab('Mapa')}
           />
         </aside>
       </div>

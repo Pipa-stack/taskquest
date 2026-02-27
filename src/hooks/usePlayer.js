@@ -22,6 +22,10 @@ const DEFAULT = {
   lastIdleTickAt: null,
   boosts: [],
   coinsPerMinuteBase: 1,
+  currentZone: 1,
+  zoneUnlockedMax: 1,
+  zoneProgress: {},
+  powerScoreCache: 0,
 }
 
 /**
@@ -53,5 +57,9 @@ export function usePlayer() {
     lastIdleTickAt: player.lastIdleTickAt ?? null,
     boosts: player.boosts ?? [],
     coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
+    currentZone: player.currentZone ?? 1,
+    zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
+    zoneProgress: player.zoneProgress ?? {},
+    powerScoreCache: player.powerScoreCache ?? 0,
   }
 }

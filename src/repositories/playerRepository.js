@@ -1,6 +1,8 @@
 import db from '../db/db.js'
 import { getBoost, getActiveBoosts, applyBoostsToCaps } from '../domain/boosts.js'
 import { computeIdleEarnings } from '../domain/idle.js'
+import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
+import { getQuest } from '../domain/zoneQuests.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -23,6 +25,10 @@ export function playerToPayload(player) {
     lastIdleTickAt: player.lastIdleTickAt ?? null,
     boosts: player.boosts ?? [],
     coinsPerMinuteBase: player.coinsPerMinuteBase ?? 1,
+    currentZone: player.currentZone ?? 1,
+    zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
+    zoneProgress: player.zoneProgress ?? {},
+    powerScoreCache: player.powerScoreCache ?? 0,
   }
 }
 
@@ -437,5 +443,153 @@ export const playerRepository = {
     })
 
     return success
+  },
+
+  /**
+   * Changes the player's current zone (must already be unlocked).
+   *
+   * @param {number} zoneId – target zone id (must be <= zoneUnlockedMax)
+   * @returns {Promise<boolean>} true on success
+   */
+  async setCurrentZone(zoneId) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, zoneUnlockedMax: 1, currentZone: 1 }
+      const maxUnlocked = player.zoneUnlockedMax ?? 1
+
+      // Can only enter an already-unlocked zone
+      if (!getZone(zoneId)) return
+      if (zoneId > maxUnlocked) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        currentZone: zoneId,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Unlocks the next zone if power and coin requirements are met.
+   * Deducts coins, increases zoneUnlockedMax, sets currentZone, and
+   * increases coinsPerMinuteBase by the zone's bonus.
+   *
+   * @param {number} zoneId     – zone to unlock (must be zoneUnlockedMax + 1)
+   * @param {number} powerScore – pre-computed power score from computePowerScore
+   * @returns {Promise<boolean>} true on success, false if conditions not met
+   */
+  async unlockZone(zoneId, powerScore) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        zoneUnlockedMax: 1,
+        currentZone: 1,
+        coinsPerMinuteBase: 1,
+        zoneProgress: {},
+      }
+
+      if (!canUnlockZone(player, powerScore, zoneId)) return
+
+      const unlocked = applyZoneUnlock(player, zoneId)
+      const updated = {
+        ...unlocked,
+        id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Claims the reward for a completed zone quest.
+   * Validates that the quest exists, applies the reward (coins), and records
+   * the quest as claimed in zoneProgress to prevent double-claiming.
+   *
+   * The caller is responsible for validating that the quest is actually
+   * completed before calling this method.
+   *
+   * @param {number} zoneId  – zone id
+   * @param {string} questId – quest id
+   * @returns {Promise<{ coins: number }|false>} reward object or false if already claimed / invalid
+   */
+  async claimZoneQuest(zoneId, questId) {
+    const quest = getQuest(questId)
+    if (!quest) return false
+
+    const now = new Date().toISOString()
+    let reward = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        zoneProgress: {},
+      }
+
+      const zoneData = (player.zoneProgress ?? {})[zoneId] ?? { claimedRewards: [] }
+      const alreadyClaimed = (zoneData.claimedRewards ?? []).includes(questId)
+      if (alreadyClaimed) return
+
+      const newZoneProgress = {
+        ...(player.zoneProgress ?? {}),
+        [zoneId]: {
+          ...zoneData,
+          claimedRewards: [...(zoneData.claimedRewards ?? []), questId],
+        },
+      }
+
+      const rewardCoins = quest.reward?.coins ?? 0
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) + rewardCoins),
+        zoneProgress: newZoneProgress,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      reward = { ...quest.reward }
+    })
+
+    return reward
   },
 }
