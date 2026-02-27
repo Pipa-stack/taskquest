@@ -208,4 +208,36 @@ db.version(8).stores({
   })
 })
 
+/**
+ * Schema v9
+ * ---------
+ * players gains onboarding + daily-loop tracking fields:
+ *   onboardingDone       – boolean; true once tutorial dismissed (default false)
+ *   onboardingStep       – int 1–3; current onboarding step (default 1)
+ *   lastIdleClaimDate    – YYYY-MM-DD; last date the player manually claimed idle coins (nullable)
+ *   lastGachaPullDate    – YYYY-MM-DD; last date the player did a gacha pull (nullable)
+ *   dailyLoopClaimedDate – YYYY-MM-DD; last date the daily loop reward was claimed (nullable)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists onboarding_done boolean not null default false,
+ *     add column if not exists onboarding_step int not null default 1,
+ *     add column if not exists last_idle_claim_date text,
+ *     add column if not exists last_gacha_pull_date text,
+ *     add column if not exists daily_loop_claimed_date text;
+ */
+db.version(9).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.onboardingDone === undefined) player.onboardingDone = false
+    if (player.onboardingStep === undefined) player.onboardingStep = 1
+    if (player.lastIdleClaimDate === undefined) player.lastIdleClaimDate = null
+    if (player.lastGachaPullDate === undefined) player.lastGachaPullDate = null
+    if (player.dailyLoopClaimedDate === undefined) player.dailyLoopClaimedDate = null
+  })
+})
+
 export default db

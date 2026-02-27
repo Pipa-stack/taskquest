@@ -75,3 +75,49 @@ export function applyGachaRareBonus(baseRates, gachaRareBonus) {
 export function computeEffectivePity(pityReduction) {
   return Math.max(PITY_MIN, PITY_DEFAULT - pityReduction)
 }
+
+/**
+ * Builds pity-forced rates that guarantee a rare+ result.
+ * Redistributes common + uncommon weight proportionally across rare/epic/legendary.
+ *
+ * @param {{ [rarity: string]: number }} rates – normalised rates
+ * @returns {{ [rarity: string]: number }}
+ */
+function forcePityRates(rates) {
+  const rareTotal = (rates.rare ?? 0) + (rates.epic ?? 0) + (rates.legendary ?? 0)
+  if (rareTotal === 0) return rates
+  const scale = 1 / rareTotal
+  return {
+    common: 0,
+    uncommon: 0,
+    rare: (rates.rare ?? 0) * scale,
+    epic: (rates.epic ?? 0) * scale,
+    legendary: (rates.legendary ?? 0) * scale,
+  }
+}
+
+/**
+ * Resolves a single gacha pull to a rarity string.
+ *
+ * Iterates rarities from rarest to most common, accumulating probability,
+ * and returns the rarity whose cumulative bucket contains `rand`.
+ * If `pityReached` is true, uses forced pity rates to guarantee rare or better.
+ *
+ * @param {{ [rarity: string]: number }} rates – normalised drop rates
+ * @param {number}  rand         – random value in [0, 1)
+ * @param {boolean} [pityReached=false] – whether the pity threshold has been hit
+ * @returns {string} rarity ('common' | 'uncommon' | 'rare' | 'epic' | 'legendary')
+ */
+export function rollGacha(rates, rand, pityReached = false) {
+  const effectiveRates = pityReached ? forcePityRates(rates) : rates
+  const rarities = ['legendary', 'epic', 'rare', 'uncommon', 'common']
+  let cumulative = 0
+  for (const rarity of rarities) {
+    cumulative += effectiveRates[rarity] ?? 0
+    if (rand < cumulative) return rarity
+  }
+  return 'common'
+}
+
+/** Coin cost for a single gacha pull. */
+export const GACHA_PULL_COST = 10

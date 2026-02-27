@@ -4,6 +4,10 @@ import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
 import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
+import { applyGachaRareBonus, rollGacha, GACHA_PULL_COST, BASE_RATES } from '../domain/gacha.js'
+import { CHARACTERS } from '../domain/characters.js'
+import { applyDailyLoopReward, getDailyLoopStatus, isDailyLoopClaimed } from '../domain/dailyLoop.js'
+import { todayKey } from '../domain/dateKey.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -34,6 +38,12 @@ export function playerToPayload(player) {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
+    // Onboarding + daily loop fields (PR23)
+    onboardingDone:       player.onboardingDone       ?? false,
+    onboardingStep:       player.onboardingStep       ?? 1,
+    lastIdleClaimDate:    player.lastIdleClaimDate    ?? null,
+    lastGachaPullDate:    player.lastGachaPullDate    ?? null,
+    dailyLoopClaimedDate: player.dailyLoopClaimedDate ?? null,
   }
 }
 
@@ -312,12 +322,14 @@ export const playerRepository = {
    *   The actual team multiplier is computed in the UI layer and can be passed
    *   as an optional param.
    *
-   * @param {number} nowMs – current timestamp in milliseconds (e.g. Date.now())
-   * @param {number} [teamMultiplier=1] – pre-computed team multiplier
+   * @param {number}  nowMs              – current timestamp in milliseconds (e.g. Date.now())
+   * @param {number}  [teamMultiplier=1] – pre-computed team multiplier
+   * @param {boolean} [fromManual=false] – if true, records lastIdleClaimDate (daily-loop tracking)
    * @returns {Promise<{ coinsEarned: number, minutesUsed: number }>}
    */
-  async tickIdle(nowMs, teamMultiplier = 1) {
+  async tickIdle(nowMs, teamMultiplier = 1, fromManual = false) {
     const nowISO = new Date(nowMs).toISOString()
+    const today = todayKey()
     let result = { coinsEarned: 0, minutesUsed: 0 }
 
     await db.transaction('rw', [db.players, db.outbox], async () => {
@@ -364,6 +376,8 @@ export const playerRepository = {
         // Prune expired boosts to keep the array tidy
         boosts: activeBoosts,
         lastIdleTickAt: new Date(earnings.newLastTickAt).toISOString(),
+        // Record daily claim date when triggered manually (for daily loop)
+        ...(fromManual && { lastIdleClaimDate: today }),
         updatedAt: nowISO,
         syncStatus: 'pending',
       }
@@ -654,5 +668,173 @@ export const playerRepository = {
     })
 
     return reward
+  },
+
+  /**
+   * Performs one gacha pull: spends GACHA_PULL_COST coins, rolls a rarity,
+   * attempts to unlock a character of that rarity, and records lastGachaPullDate.
+   *
+   * - If the player has insufficient coins → returns false.
+   * - Rarity is modified by the player's gacha talent bonus.
+   * - Tries to unlock the first character of the rolled rarity not yet owned.
+   *   If all characters of that rarity are owned, picks any character not yet owned.
+   *   If all characters are owned → still records the date; characterId is null.
+   * - Uses Math.random() internally; pass `_randOverride` in tests.
+   *
+   * @param {number} [nowMs=Date.now()]
+   * @param {number} [_randOverride]   – random value override for testing [0,1)
+   * @returns {Promise<{ rarity: string, characterId: string|null }|false>}
+   */
+  async pullGacha(nowMs = Date.now(), _randOverride) {
+    const nowISO = new Date(nowMs).toISOString()
+    const today = todayKey()
+    let pullResult = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        unlockedCharacters: [],
+        talents: { idle: 0, gacha: 0, power: 0 },
+      }
+
+      const coins = player.coins ?? 0
+      if (coins < GACHA_PULL_COST) return
+
+      // Apply gacha talent bonus to drop rates
+      const talentBonuses = computeTalentBonuses(player.talents ?? {})
+      const effectiveRates = applyGachaRareBonus(BASE_RATES, talentBonuses.gachaRareBonus ?? 0)
+
+      const rand = _randOverride !== undefined ? _randOverride : Math.random()
+      const rarity = rollGacha(effectiveRates, rand)
+
+      // Find a character to unlock
+      const unlocked = player.unlockedCharacters ?? []
+      const byRarity = CHARACTERS.filter((c) => c.rarity === rarity && !unlocked.includes(c.id))
+      const fallback = CHARACTERS.filter((c) => !unlocked.includes(c.id))
+      const candidate = byRarity[0] ?? fallback[0] ?? null
+
+      const newUnlocked = candidate ? [...unlocked, candidate.id] : unlocked
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, coins - GACHA_PULL_COST),
+        unlockedCharacters: newUnlocked,
+        lastGachaPullDate: today,
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      pullResult = { rarity, characterId: candidate?.id ?? null }
+    })
+
+    return pullResult
+  },
+
+  /**
+   * Claims the daily loop reward if all 3 conditions are met and not yet claimed today.
+   *
+   * Conditions: dailyGoalMet, idleClaimed, gachaPulled (all today).
+   * Reward: +50 coins, +10 essence.
+   *
+   * @param {number} todayDone – number of tasks completed today (passed from UI layer)
+   * @returns {Promise<{ coins: number, essence: number }|false>}
+   */
+  async claimDailyLoop(todayDone) {
+    const now = new Date().toISOString()
+    const today = todayKey()
+    let reward = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
+
+      if (isDailyLoopClaimed(player, today)) return
+
+      const status = getDailyLoopStatus(player, todayDone, today)
+      if (!status.allDone) return
+
+      const applied = applyDailyLoopReward(player, today)
+      const updated = {
+        ...applied,
+        id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      reward = { coins: 50, essence: 10 }
+    })
+
+    return reward
+  },
+
+  /**
+   * Marks onboarding as completed (onboardingDone = true).
+   *
+   * @returns {Promise<void>}
+   */
+  async completeOnboarding() {
+    const now = new Date().toISOString()
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
+      const updated = {
+        ...player,
+        id: 1,
+        onboardingDone: true,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
+  },
+
+  /**
+   * Persists the current onboarding step (auto-advance support).
+   *
+   * @param {number} step – step number (1–3)
+   * @returns {Promise<void>}
+   */
+  async setOnboardingStep(step) {
+    const now = new Date().toISOString()
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
+      const updated = {
+        ...player,
+        id: 1,
+        onboardingStep: step,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
   },
 }

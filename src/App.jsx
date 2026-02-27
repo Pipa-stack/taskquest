@@ -16,11 +16,14 @@ import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
+import BaseDashboard from './components/BaseDashboard.jsx'
+import OnboardingModal from './components/OnboardingModal.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
 import { computePowerScore } from './domain/power.js'
 import { CHARACTERS } from './domain/characters.js'
+import { detectOnboardingProgress } from './domain/onboarding.js'
 import db from './db/db.js'
 import { supabase } from './lib/supabase.js'
 import { pushOutbox, pullRemote } from './services/taskSyncService.js'
@@ -30,7 +33,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa', 'Talentos']
+const TABS = ['Base', 'Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa', 'Talentos']
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -56,9 +59,18 @@ function App() {
   const player = usePlayer()
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState('Tasks')
+  const [activeTab, setActiveTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+
+  // Live task counts for onboarding detection
+  const totalTaskCount = useLiveQuery(() => db.tasks.count(), [], 0)
+  const totalCompletedCount = useLiveQuery(
+    () => db.tasks.where('status').equals('done').count(),
+    [],
+    0
+  )
 
   // Live count of pending outbox entries (drives the sync indicator)
   const pendingOutboxCount = useLiveQuery(
@@ -72,6 +84,37 @@ function App() {
     () => computePowerScore(player.activeTeam ?? [], {}, CHARACTERS),
     [player.activeTeam]
   )
+
+  // Onboarding: detect current step
+  const onboardingStep = useMemo(() => {
+    if (onboardingDismissed) return null
+    return detectOnboardingProgress({
+      onboardingDone: player.onboardingDone ?? false,
+      onboardingStep: player.onboardingStep ?? 1,
+      taskCount: totalTaskCount ?? 0,
+      completedCount: totalCompletedCount ?? 0,
+      idleClaimed: (player.lastIdleClaimDate ?? null) === today,
+      gachaPulled: (player.lastGachaPullDate ?? null) === today,
+    })
+  }, [
+    onboardingDismissed,
+    player.onboardingDone,
+    player.onboardingStep,
+    totalTaskCount,
+    totalCompletedCount,
+    player.lastIdleClaimDate,
+    player.lastGachaPullDate,
+    today,
+  ])
+
+  // Persist onboarding step changes to DB
+  useEffect(() => {
+    if (onboardingStep == null) return
+    const stored = player.onboardingStep ?? 1
+    if (onboardingStep !== stored) {
+      playerRepository.setOnboardingStep(onboardingStep).catch(console.warn)
+    }
+  }, [onboardingStep, player.onboardingStep])
 
   // Keep a ref of current XP so handleComplete can read it synchronously
   const playerXpRef = useRef(player.xp)
@@ -184,6 +227,23 @@ function App() {
       <div className="app-layout">
         <main className="app-main">
           <AnimatePresence mode="wait">
+            {activeTab === 'Base' && (
+              <motion.div
+                key="base"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <BaseDashboard
+                  player={player}
+                  powerScore={powerScore}
+                  onNotify={addNotification}
+                  onNavigate={setActiveTab}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'Tasks' && (
               <motion.div
                 key="tasks"
@@ -253,6 +313,7 @@ function App() {
               >
                 <CharacterCollection
                   xp={player.xp}
+                  coins={player.coins}
                   unlockedCharacters={player.unlockedCharacters}
                   activeTeam={player.activeTeam}
                   onNotify={addNotification}
@@ -343,6 +404,18 @@ function App() {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
+
+      {/* One-time onboarding modal */}
+      {onboardingStep != null && (
+        <OnboardingModal
+          currentStep={onboardingStep}
+          onSkip={() => setOnboardingDismissed(true)}
+          onNavigate={(tab) => {
+            setActiveTab(tab)
+            setOnboardingDismissed(true)
+          }}
+        />
+      )}
     </div>
   )
 }

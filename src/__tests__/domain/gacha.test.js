@@ -3,9 +3,11 @@ import {
   BASE_RATES,
   PITY_DEFAULT,
   PITY_MIN,
+  GACHA_PULL_COST,
   normalizeRates,
   applyGachaRareBonus,
   computeEffectivePity,
+  rollGacha,
 } from '../../domain/gacha.js'
 
 // ── normalizeRates ────────────────────────────────────────────────────────────
@@ -155,5 +157,56 @@ describe('computeEffectivePity', () => {
   it('pityReduction=gacha talent integration: gacha=10 → floor(10/2)=5 → pity=25', () => {
     const pityReduction = Math.floor(10 / 2)
     expect(computeEffectivePity(pityReduction)).toBe(25)
+  })
+})
+
+// ── rollGacha ─────────────────────────────────────────────────────────────────
+
+describe('rollGacha', () => {
+  const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'epic', 'legendary'])
+
+  it('returns a valid rarity string', () => {
+    expect(VALID_RARITIES.has(rollGacha(BASE_RATES, 0.5))).toBe(true)
+  })
+
+  it('returns legendary when rand is 0 (rarest hits first)', () => {
+    expect(rollGacha(BASE_RATES, 0)).toBe('legendary')
+  })
+
+  it('returns common when rand is 0.9999 (most common is last)', () => {
+    expect(rollGacha(BASE_RATES, 0.9999)).toBe('common')
+  })
+
+  it('returns common as fallback when rand equals 1.0', () => {
+    expect(rollGacha(BASE_RATES, 1.0)).toBe('common')
+  })
+
+  it('with pityReached=true never returns common or uncommon', () => {
+    const undesired = new Set(['common', 'uncommon'])
+    // i < 20 keeps rand in [0, 0.95] — Math.random() returns [0, 1) so 1.0 is excluded
+    for (let i = 0; i < 20; i++) {
+      const result = rollGacha(BASE_RATES, i / 20, true)
+      expect(undesired.has(result)).toBe(false)
+    }
+  })
+
+  it('with pityReached=true always returns rare, epic, or legendary', () => {
+    const desired = new Set(['rare', 'epic', 'legendary'])
+    for (let i = 0; i < 20; i++) {
+      const result = rollGacha(BASE_RATES, i / 20, true)
+      expect(desired.has(result)).toBe(true)
+    }
+  })
+})
+
+// ── GACHA_PULL_COST ───────────────────────────────────────────────────────────
+
+describe('GACHA_PULL_COST', () => {
+  it('is a positive number', () => {
+    expect(GACHA_PULL_COST).toBeGreaterThan(0)
+  })
+
+  it('equals 10', () => {
+    expect(GACHA_PULL_COST).toBe(10)
   })
 })

@@ -1,18 +1,28 @@
 import { CHARACTERS } from '../domain/characters.js'
 import { playerRepository } from '../repositories/playerRepository.js'
+import { GACHA_PULL_COST } from '../domain/gacha.js'
 
 const MAX_TEAM = 3
+
+const RARITY_LABEL = {
+  common: 'Común',
+  uncommon: 'Poco común',
+  rare: 'Raro',
+  epic: 'Épico',
+  legendary: 'Legendario',
+}
 
 /**
  * Renders the character collection and active team management UI.
  *
  * Props:
  *   xp                – current player XP (for buy button)
+ *   coins             – current coins (for gacha pull)
  *   unlockedCharacters – string[] of unlocked character ids
  *   activeTeam         – string[] of up to 3 character ids
  *   onNotify           – callback(message: string) for toast notifications
  */
-export default function CharacterCollection({ xp, unlockedCharacters, activeTeam, onNotify }) {
+export default function CharacterCollection({ xp, coins, unlockedCharacters, activeTeam, onNotify }) {
   const unlockedSet = new Set(unlockedCharacters)
   const teamSet = new Set(activeTeam)
 
@@ -41,8 +51,43 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
     await playerRepository.removeFromTeam(character.id)
   }
 
+  const handleGachaPull = async () => {
+    const result = await playerRepository.pullGacha(Date.now())
+    if (!result) {
+      onNotify?.(`Necesitas ${GACHA_PULL_COST} monedas para hacer un pull`)
+      return
+    }
+    const { rarity, characterId } = result
+    const char = CHARACTERS.find((c) => c.id === characterId)
+    const rarityLabel = RARITY_LABEL[rarity] ?? rarity
+    if (char) {
+      const isNew = !(unlockedCharacters ?? []).includes(characterId)
+      onNotify?.(isNew
+        ? `🎰 [${rarityLabel}] ¡${char.name} desbloqueado! 🎉`
+        : `🎰 [${rarityLabel}] ${char.name} (ya lo tenías)`)
+    } else {
+      onNotify?.(`🎰 Pull realizado: ${rarityLabel}`)
+    }
+  }
+
   return (
     <div className="char-collection">
+      {/* Gacha pull section */}
+      <section className="gacha-section">
+        <h3 className="gacha-title">🎰 Gacha</h3>
+        <p className="gacha-desc">
+          Gasta <strong>{GACHA_PULL_COST} monedas</strong> para un pull aleatorio.
+          Monedas actuales: <strong>{coins ?? 0}</strong>
+        </p>
+        <button
+          className="gacha-pull-btn"
+          onClick={handleGachaPull}
+          disabled={(coins ?? 0) < GACHA_PULL_COST}
+        >
+          Pull ({GACHA_PULL_COST} 🪙)
+        </button>
+      </section>
+
       {/* Active team slots */}
       <section className="team-section">
         <h3 className="team-title">Tu equipo ({activeTeam.length}/{MAX_TEAM})</h3>
