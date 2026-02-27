@@ -208,4 +208,30 @@ db.version(8).stores({
   })
 })
 
+/**
+ * Schema v9
+ * ---------
+ * players gains onboarding and daily-loop tracking fields:
+ *   onboardingDone      – boolean; true once the player completes/skips onboarding (default false)
+ *   onboardingStep      – int 1–3; current onboarding step (default 1)
+ *   dailyLoopClaimedDate – YYYY-MM-DD of the last daily-loop reward claim (default null)
+ *   lastIdleClaimDate   – YYYY-MM-DD of the last manual idle claim (default null)
+ *   lastGachaPullDate   – YYYY-MM-DD of the last gacha pull (default null)
+ *   gachaPityCount      – non-rare pulls since last rare+ result (default 0)
+ */
+db.version(9).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.onboardingDone === undefined) player.onboardingDone = false
+    if (player.onboardingStep === undefined) player.onboardingStep = 1
+    if (player.dailyLoopClaimedDate === undefined) player.dailyLoopClaimedDate = null
+    if (player.lastIdleClaimDate === undefined) player.lastIdleClaimDate = null
+    if (player.lastGachaPullDate === undefined) player.lastGachaPullDate = null
+    if (player.gachaPityCount === undefined) player.gachaPityCount = 0
+  })
+})
+
 export default db

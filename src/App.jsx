@@ -16,6 +16,9 @@ import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
+import BaseDashboard from './components/BaseDashboard.jsx'
+import GachaShop from './components/GachaShop.jsx'
+import OnboardingModal from './components/OnboardingModal.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -30,7 +33,7 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa', 'Talentos']
+const TABS = ['Base', 'Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Gacha', 'Mapa', 'Talentos']
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -56,7 +59,7 @@ function App() {
   const player = usePlayer()
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState('Tasks')
+  const [activeTab, setActiveTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
 
@@ -184,6 +187,23 @@ function App() {
       <div className="app-layout">
         <main className="app-main">
           <AnimatePresence mode="wait">
+            {activeTab === 'Base' && (
+              <motion.div
+                key="base"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <BaseDashboard
+                  player={player}
+                  powerScore={powerScore}
+                  onNotify={addNotification}
+                  onNavigate={setActiveTab}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'Tasks' && (
               <motion.div
                 key="tasks"
@@ -276,6 +296,23 @@ function App() {
               </motion.div>
             )}
 
+            {activeTab === 'Gacha' && (
+              <motion.div
+                key="gacha"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+              >
+                <GachaShop
+                  coins={player.coins}
+                  talents={player.talents}
+                  gachaPityCount={player.gachaPityCount}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'Mapa' && (
               <motion.div
                 key="mapa"
@@ -338,6 +375,8 @@ function App() {
         level={player.level}
         onDone={() => setShowLevelUp(false)}
       />
+
+      <OnboardingModal player={player} />
 
       <Notifications
         notifications={notifications}

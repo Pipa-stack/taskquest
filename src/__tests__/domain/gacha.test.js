@@ -6,6 +6,7 @@ import {
   normalizeRates,
   applyGachaRareBonus,
   computeEffectivePity,
+  rollGacha,
 } from '../../domain/gacha.js'
 
 // ── normalizeRates ────────────────────────────────────────────────────────────
@@ -155,5 +156,48 @@ describe('computeEffectivePity', () => {
   it('pityReduction=gacha talent integration: gacha=10 → floor(10/2)=5 → pity=25', () => {
     const pityReduction = Math.floor(10 / 2)
     expect(computeEffectivePity(pityReduction)).toBe(25)
+  })
+})
+
+// ── rollGacha ────────────────────────────────────────────────────────────────
+
+describe('rollGacha', () => {
+  const PITY = 30
+
+  it('returns a valid rarity key from the rates table', () => {
+    const validRarities = Object.keys(BASE_RATES)
+    // Run 20 rolls with random RNG, all results must be valid
+    for (let i = 0; i < 20; i++) {
+      const rarity = rollGacha(BASE_RATES, 0, PITY)
+      expect(validRarities).toContain(rarity)
+    }
+  })
+
+  it('always returns rare+ when pity is triggered (pityCount + 1 >= threshold)', () => {
+    const rng = () => 0.999 // always pick the last entry of pity pool
+    const pityThreshold = 30
+    const pityCount = pityThreshold - 1 // triggers pity
+    const result = rollGacha(BASE_RATES, pityCount, pityThreshold, rng)
+    expect(['rare', 'epic', 'legendary']).toContain(result)
+  })
+
+  it('can return common when rng value is very low (no pity)', () => {
+    // rng() = 0.0 → hits 'common' immediately (first in table at 60%)
+    const result = rollGacha(BASE_RATES, 0, PITY, () => 0)
+    expect(result).toBe('common')
+  })
+
+  it('does not trigger pity when pityCount + 1 < threshold', () => {
+    // With deterministic low RNG, result is common (no pity forced)
+    const result = rollGacha(BASE_RATES, 5, PITY, () => 0)
+    expect(result).toBe('common') // common is first, RNG=0 selects it
+  })
+
+  it('pity pool output is one of rare/epic/legendary', () => {
+    // Test several deterministic pity rolls
+    for (const rng of [() => 0, () => 0.5, () => 0.9999]) {
+      const result = rollGacha(BASE_RATES, PITY - 1, PITY, rng)
+      expect(['rare', 'epic', 'legendary']).toContain(result)
+    }
   })
 })

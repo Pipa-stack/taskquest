@@ -4,6 +4,9 @@ import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
 import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
+import { applyDailyLoopReward, isDailyLoopComplete, hasDailyLoopClaimed } from '../domain/dailyLoop.js'
+import { BASE_RATES, applyGachaRareBonus, computeEffectivePity, rollGacha } from '../domain/gacha.js'
+import { CHARACTERS } from '../domain/characters.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -34,6 +37,13 @@ export function playerToPayload(player) {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
+    // Onboarding + daily loop fields (PR23) — persisted for cross-device continuity
+    onboardingDone:       player.onboardingDone       ?? false,
+    onboardingStep:       player.onboardingStep       ?? 1,
+    dailyLoopClaimedDate: player.dailyLoopClaimedDate ?? null,
+    lastIdleClaimDate:    player.lastIdleClaimDate    ?? null,
+    lastGachaPullDate:    player.lastGachaPullDate    ?? null,
+    gachaPityCount:       player.gachaPityCount       ?? 0,
   }
 }
 
@@ -316,7 +326,7 @@ export const playerRepository = {
    * @param {number} [teamMultiplier=1] – pre-computed team multiplier
    * @returns {Promise<{ coinsEarned: number, minutesUsed: number }>}
    */
-  async tickIdle(nowMs, teamMultiplier = 1) {
+  async tickIdle(nowMs, teamMultiplier = 1, fromManual = false) {
     const nowISO = new Date(nowMs).toISOString()
     let result = { coinsEarned: 0, minutesUsed: 0 }
 
@@ -356,6 +366,7 @@ export const playerRepository = {
 
       result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed }
 
+      const todayISO = new Date(nowMs).toLocaleDateString('sv') // YYYY-MM-DD in local TZ
       const updated = {
         ...player,
         id: 1,
@@ -366,6 +377,8 @@ export const playerRepository = {
         lastIdleTickAt: new Date(earnings.newLastTickAt).toISOString(),
         updatedAt: nowISO,
         syncStatus: 'pending',
+        // Track manual idle claims for daily loop detection
+        ...(fromManual && { lastIdleClaimDate: todayISO }),
       }
       await db.players.put(updated)
       await db.outbox.add({
@@ -604,6 +617,184 @@ export const playerRepository = {
     })
 
     return success
+  },
+
+  /**
+   * Advances the onboarding step or marks onboarding as done.
+   *
+   * - If step is null → marks onboardingDone=true (skip or final completion).
+   * - If step is a number (1–3) → updates onboardingStep.
+   * - Enqueues UPSERT_PLAYER outbox entry.
+   *
+   * @param {number|null} step – next step (1-indexed) or null to mark done
+   * @returns {Promise<void>}
+   */
+  async setOnboardingStep(step) {
+    const now = new Date().toISOString()
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
+      const updated = {
+        ...player,
+        id: 1,
+        onboardingDone:  step === null ? true : (player.onboardingDone ?? false),
+        onboardingStep:  step === null ? (player.onboardingStep ?? 1) : step,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+    })
+  },
+
+  /**
+   * Marks onboarding as fully completed (skipped or finished step 3).
+   *
+   * @returns {Promise<void>}
+   */
+  async completeOnboarding() {
+    return this.setOnboardingStep(null)
+  },
+
+  /**
+   * Claims the daily loop reward for today.
+   *
+   * Validates:
+   *   - All three daily loop conditions are met (goal, idle, gacha).
+   *   - The reward hasn't already been claimed today.
+   *
+   * On success: applies +50 coins, +10 essence, sets dailyLoopClaimedDate.
+   * Enqueues UPSERT_PLAYER outbox entry.
+   *
+   * @param {string} today           – YYYY-MM-DD key for today
+   * @param {number} todayDone       – tasks completed today
+   * @returns {Promise<boolean>} true if reward was granted, false otherwise
+   */
+  async claimDailyLoop(today, todayDone) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0 }
+
+      if (hasDailyLoopClaimed(player, today)) return
+
+      const loopComplete = isDailyLoopComplete({
+        todayDone,
+        dailyGoal:          player.dailyGoal          ?? 3,
+        lastIdleClaimDate:  player.lastIdleClaimDate  ?? null,
+        lastGachaPullDate:  player.lastGachaPullDate  ?? null,
+        today,
+      })
+      if (!loopComplete) return
+
+      const rewarded = applyDailyLoopReward(player, today)
+      const updated = {
+        ...rewarded,
+        id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Performs one gacha pull: deducts coins, rolls a character, updates
+   * pity counter, records lastGachaPullDate, and grants the result.
+   *
+   * Pull cost: 30 coins.
+   * If the rolled character is already owned → grants 5 essence instead.
+   * Pity resets to 0 on a rare+ result; otherwise increments by 1.
+   * Enqueues UPSERT_PLAYER outbox entry.
+   *
+   * @param {number}   nowMs       – current timestamp in milliseconds
+   * @param {function} [rng]       – RNG function (default: Math.random), injectable for tests
+   * @returns {Promise<{
+   *   rarity: string,
+   *   character: object|null,
+   *   isNew: boolean,
+   *   essenceBonus: number
+   * }|false>} result object, or false if insufficient coins
+   */
+  async pullGacha(nowMs, rng = Math.random) {
+    const PULL_COST = 30
+    const DUPE_ESSENCE = 5
+    const nowISO = new Date(nowMs).toISOString()
+    const todayISO = new Date(nowMs).toLocaleDateString('sv') // YYYY-MM-DD
+    let result = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1, xp: 0, coins: 0, essence: 0, gachaPityCount: 0,
+        talents: { idle: 0, gacha: 0, power: 0 }, unlockedCharacters: [],
+      }
+
+      if ((player.coins ?? 0) < PULL_COST) return
+
+      const talents = player.talents ?? { idle: 0, gacha: 0, power: 0 }
+      const gachaRareBonus = (talents.gacha ?? 0) * 0.01
+      const pityReduction  = Math.floor((talents.gacha ?? 0) / 2)
+      const effectiveRates = applyGachaRareBonus(BASE_RATES, gachaRareBonus)
+      const pityThreshold  = computeEffectivePity(pityReduction)
+      const pityCount      = player.gachaPityCount ?? 0
+
+      const rarity = rollGacha(effectiveRates, pityCount, pityThreshold, rng)
+
+      // Pick a random character of the rolled rarity
+      const pool = CHARACTERS.filter((c) => c.rarity === rarity)
+      const character = pool.length > 0 ? pool[Math.floor(rng() * pool.length)] : null
+
+      const owned = player.unlockedCharacters ?? []
+      const isNew = character && !owned.includes(character.id)
+      const essenceBonus = isNew ? 0 : DUPE_ESSENCE
+
+      const isRarePlus = ['rare', 'epic', 'legendary'].includes(rarity)
+      const newPityCount = isRarePlus ? 0 : pityCount + 1
+
+      const updatedUnlocked = isNew
+        ? [...owned, character.id]
+        : owned
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins:              Math.max(0, (player.coins ?? 0) - PULL_COST),
+        essence:            (player.essence ?? 0) + essenceBonus,
+        unlockedCharacters: updatedUnlocked,
+        gachaPityCount:     newPityCount,
+        lastGachaPullDate:  todayISO,
+        updatedAt:          nowISO,
+        syncStatus:         'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+
+      result = { rarity, character: character ?? null, isNew: Boolean(isNew), essenceBonus }
+    })
+
+    return result
   },
 
   async claimZoneQuest(zoneId, questId) {

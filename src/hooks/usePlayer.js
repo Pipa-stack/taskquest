@@ -30,6 +30,13 @@ const DEFAULT = {
   essence: 0,
   talents: { idle: 0, gacha: 0, power: 0 },
   essenceSpent: 0,
+  // Onboarding + daily loop fields (PR23)
+  onboardingDone: false,
+  onboardingStep: 1,
+  dailyLoopClaimedDate: null,
+  lastIdleClaimDate: null,
+  lastGachaPullDate: null,
+  gachaPityCount: 0,
 }
 
 /**
@@ -69,5 +76,12 @@ export function usePlayer() {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
+    // Onboarding + daily loop fields (PR23)
+    onboardingDone:       player.onboardingDone       ?? false,
+    onboardingStep:       player.onboardingStep       ?? 1,
+    dailyLoopClaimedDate: player.dailyLoopClaimedDate ?? null,
+    lastIdleClaimDate:    player.lastIdleClaimDate    ?? null,
+    lastGachaPullDate:    player.lastGachaPullDate    ?? null,
+    gachaPityCount:       player.gachaPityCount       ?? 0,
   }
 }

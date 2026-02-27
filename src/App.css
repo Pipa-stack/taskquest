@@ -1647,3 +1647,525 @@ ul {
   text-align: center;
   padding: 1rem;
 }
+
+/* ── BaseDashboard ─────────────────────────────────────────────────── */
+.base-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.base-block {
+  background: #1a1a2e;
+  border: 1px solid #2d2d4e;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+
+.base-block-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7c7ca8;
+  margin-bottom: 0.75rem;
+}
+
+/* Claim block */
+.base-block-claim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  border-color: #3b3b6a;
+}
+
+.base-accumulation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.base-acc-label {
+  font-size: 0.7rem;
+  color: #7c7ca8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.base-acc-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fbbf24;
+  line-height: 1;
+}
+
+.base-acc-hint {
+  font-size: 0.72rem;
+  color: #5a5a7a;
+  text-align: center;
+}
+
+.base-claim-btn {
+  padding: 0.7rem 2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  letter-spacing: 0.03em;
+}
+.base-claim-btn--active {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #1a1a2e;
+}
+.base-claim-btn--active:hover {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  transform: scale(1.03);
+}
+.base-claim-btn--idle {
+  background: #2d2d4e;
+  color: #5a5a7a;
+  cursor: not-allowed;
+}
+
+/* Estado block */
+.base-estado-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.base-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #2d2d4e;
+  font-size: 0.85rem;
+}
+.base-stat-row:last-child { border-bottom: none; }
+
+.base-stat-label { color: #7c7ca8; }
+.base-stat-value { font-weight: 600; color: #e2e2e7; }
+
+.boost-badge-sm {
+  font-size: 0.7rem;
+  color: #fbbf24;
+  background: #3b2f00;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  margin-left: 0.3rem;
+}
+
+/* Actions block */
+.base-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .base-actions-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.base-action-btn {
+  background: #24243e;
+  border: 1px solid #3b3b6a;
+  color: #c4c4e0;
+  border-radius: 8px;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-weight: 600;
+}
+.base-action-btn:hover {
+  background: #2d2d50;
+  border-color: #6060a8;
+}
+
+/* Objectives block */
+.base-objective {
+  margin-bottom: 0.75rem;
+}
+
+.base-obj-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.base-obj-label {
+  font-size: 0.83rem;
+  color: #c4c4e0;
+}
+
+.base-obj-check { color: #4ade80; margin-left: 0.3rem; }
+
+.base-obj-bar-wrap {
+  height: 7px;
+  background: #2d2d4e;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.base-obj-bar {
+  height: 100%;
+  background: #60a5fa;
+  border-radius: 6px;
+  min-width: 4px;
+}
+
+.base-obj-bar--done { background: #4ade80; }
+
+/* Daily loop conditions */
+.base-loop-conditions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.base-loop-cond {
+  font-size: 0.75rem;
+  color: #7c7ca8;
+  padding: 0.2rem 0.5rem;
+  background: #1e1e3a;
+  border-radius: 6px;
+  border: 1px solid #2d2d4e;
+}
+.base-loop-cond.cond-met {
+  color: #4ade80;
+  border-color: #166534;
+  background: #052e16;
+}
+
+/* Zone quests mini */
+.base-quests-subtitle {
+  font-size: 0.72rem;
+  color: #7c7ca8;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.base-quest-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #1e1e3a;
+}
+.base-quest-item:last-child { border-bottom: none; }
+.base-quest-item.quest-claimed { opacity: 0.5; }
+
+.base-quest-label { font-size: 0.78rem; color: #c4c4e0; }
+
+.base-quest-bar-wrap {
+  width: 60px;
+  height: 5px;
+  background: #2d2d4e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.base-quest-bar {
+  height: 100%;
+  background: #a78bfa;
+  border-radius: 4px;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+
+.base-quest-count {
+  font-size: 0.7rem;
+  color: #7c7ca8;
+  white-space: nowrap;
+}
+
+/* Progress block */
+.base-progress-item { margin-bottom: 0.75rem; }
+.base-progress-item:last-child { margin-bottom: 0; }
+
+.base-prog-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
+.base-prog-label { font-size: 0.82rem; color: #c4c4e0; }
+.base-prog-value { font-size: 0.75rem; color: #7c7ca8; }
+.base-prog-max { color: #fbbf24; }
+
+.base-prog-bar-wrap {
+  height: 8px;
+  background: #2d2d4e;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.base-prog-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+  border-radius: 6px;
+  min-width: 4px;
+}
+
+.base-prestige-hint {
+  font-size: 0.78rem;
+  color: #7c7ca8;
+  text-align: center;
+  padding: 0.4rem;
+  border: 1px dashed #2d2d4e;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+
+/* Daily loop banner */
+.daily-loop-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #052e16, #064e3b);
+  border: 1px solid #166534;
+  margin-bottom: 0.5rem;
+}
+.daily-loop-banner--done {
+  background: #1a2a1a;
+  border-color: #2d4e2d;
+}
+
+.daily-loop-icon { font-size: 1.2rem; }
+.daily-loop-text { font-size: 0.85rem; color: #a7f3d0; flex: 1; }
+
+.daily-loop-claim-btn {
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.daily-loop-claim-btn:hover { background: #047857; }
+
+/* ── GachaShop ──────────────────────────────────────────────────────── */
+.gacha-shop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 480px;
+}
+
+.gacha-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #e2e2e7;
+}
+
+.gacha-balance {
+  font-size: 0.88rem;
+  color: #c4c4e0;
+}
+
+.gacha-cost { color: #7c7ca8; }
+
+.gacha-pity {
+  font-size: 0.82rem;
+  color: #c4c4e0;
+}
+.gacha-pity-warning { color: #f59e0b; }
+
+.gacha-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gacha-rate-chip {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  background: #1e1e3a;
+  border-radius: 5px;
+  border: 1px solid #2d2d4e;
+}
+
+.gacha-pull-btn {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #fff;
+  transition: opacity 0.15s, transform 0.1s;
+  align-self: flex-start;
+}
+.gacha-pull-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: scale(1.03);
+}
+.gacha-pull-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.gacha-result {
+  border: 2px solid #3b3b6a;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #16162a;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.gacha-result-rarity {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.gacha-result-character {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gacha-result-emoji { font-size: 1.8rem; }
+.gacha-result-name  { font-size: 1rem; font-weight: 700; color: #e2e2e7; }
+
+.gacha-result-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gacha-result-new  { background: #1e4620; color: #4ade80; }
+.gacha-result-dupe { background: #312e81; color: #a5b4fc; }
+
+/* ── OnboardingModal ────────────────────────────────────────────────── */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+}
+
+.onboarding-modal {
+  background: #1a1a2e;
+  border: 1px solid #3b3b6a;
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 420px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.onboarding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.onboarding-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a78bfa;
+  background: #1e1a40;
+  border: 1px solid #4c3aad;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+}
+
+.onboarding-steps-count {
+  font-size: 0.75rem;
+  color: #7c7ca8;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2d2d4e;
+  transition: background 0.2s;
+}
+.onboarding-dot.dot-active { background: #a78bfa; }
+.onboarding-dot.dot-done   { background: #4ade80; }
+
+.onboarding-content { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.onboarding-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #e2e2e7;
+}
+
+.onboarding-description {
+  font-size: 0.88rem;
+  color: #c4c4e0;
+  line-height: 1.5;
+}
+
+.onboarding-hint {
+  font-size: 0.8rem;
+  color: #7c7ca8;
+  font-style: italic;
+}
+
+.onboarding-progress-wrap {
+  height: 4px;
+  background: #2d2d4e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.onboarding-progress-bar {
+  height: 100%;
+  background: #a78bfa;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.onboarding-skip-btn {
+  background: none;
+  border: none;
+  color: #5a5a7a;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: underline;
+  align-self: center;
+  padding: 0.2rem 0;
+  transition: color 0.15s;
+}
+.onboarding-skip-btn:hover { color: #94a3b8; }

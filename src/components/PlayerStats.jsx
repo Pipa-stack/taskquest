@@ -51,7 +51,7 @@ export default function PlayerStats({
   }
 
   const handleTickIdle = async () => {
-    const { coinsEarned } = await playerRepository.tickIdle(Date.now())
+    const { coinsEarned } = await playerRepository.tickIdle(Date.now(), 1, true)
     if (onNotify) {
       if (coinsEarned > 0) {
         onNotify(`+${coinsEarned} monedas reclamadas`)
