@@ -3,6 +3,7 @@ import { getBoost, getActiveBoosts, applyBoostsToCaps } from '../domain/boosts.j
 import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
+import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -29,6 +30,10 @@ export function playerToPayload(player) {
     zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
     zoneProgress: player.zoneProgress ?? {},
     powerScoreCache: player.powerScoreCache ?? 0,
+    // Talent tree fields (PR21)
+    essence:      player.essence      ?? 0,
+    talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
+    essenceSpent: player.essenceSpent ?? 0,
   }
 }
 
@@ -329,7 +334,15 @@ export const playerRepository = {
 
       const storedBoosts = player.boosts ?? []
       const activeBoosts = getActiveBoosts(storedBoosts, nowMs)
-      const effectiveEnergyCap = applyBoostsToCaps(player.energyCap ?? 100, activeBoosts)
+
+      // Apply talent bonuses on top of base caps and multipliers
+      const talentBonuses = computeTalentBonuses(player.talents ?? {})
+      const effectiveEnergyCap = applyBoostsToCaps(
+        (player.energyCap ?? 100) + talentBonuses.energyCapBonus,
+        activeBoosts,
+      )
+      const effectiveMultiplier =
+        teamMultiplier * talentBonuses.idleCoinMult * (player.globalMultiplierCache ?? 1)
 
       const earnings = computeIdleEarnings({
         now: nowMs,
@@ -337,7 +350,7 @@ export const playerRepository = {
         energy: player.energy ?? 100,
         energyCap: effectiveEnergyCap,
         baseCpm: player.coinsPerMinuteBase ?? 1,
-        multiplier: teamMultiplier,
+        multiplier: effectiveMultiplier,
         activeBoosts,
       })
 
@@ -543,6 +556,56 @@ export const playerRepository = {
    * @param {string} questId – quest id
    * @returns {Promise<{ coins: number }|false>} reward object or false if already claimed / invalid
    */
+  /**
+   * Spends essence to buy one talent point in the given branch.
+   *
+   * Validates that:
+   *   - The branch is valid ('idle' | 'gacha' | 'power')
+   *   - The player has enough essence
+   *   - The branch hasn't reached TALENT_MAX
+   *
+   * On success: decrements essence, increments talent level, accumulates essenceSpent,
+   *             and enqueues a UPSERT_PLAYER outbox entry.
+   *
+   * @param {'idle'|'gacha'|'power'} branch
+   * @returns {Promise<boolean>} true on success, false if conditions not met
+   */
+  async spendEssenceOnTalent(branch) {
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        essence: 0,
+        talents: { idle: 0, gacha: 0, power: 0 },
+        essenceSpent: 0,
+      }
+
+      if (!canSpendEssence(player, branch)) return
+
+      const applied = applySpendEssence(player, branch)
+      const updated = {
+        ...applied,
+        id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
   async claimZoneQuest(zoneId, questId) {
     const quest = getQuest(questId)
     if (!quest) return false

@@ -182,4 +182,30 @@ db.version(7).stores({
   })
 })
 
+/**
+ * Schema v8
+ * ---------
+ * players gains talent-tree fields:
+ *   essence       – resource currency for spending on talent points (default 0)
+ *   talents       – { idle, gacha, power } talent levels 0–10 (default {})
+ *   essenceSpent  – cumulative essence spent across all talent branches (default 0)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists essence int not null default 0,
+ *     add column if not exists talents jsonb not null default '{}'::jsonb,
+ *     add column if not exists essence_spent int not null default 0;
+ */
+db.version(8).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.essence === undefined) player.essence = 0
+    if (!player.talents) player.talents = { idle: 0, gacha: 0, power: 0 }
+    if (player.essenceSpent === undefined) player.essenceSpent = 0
+  })
+})
+
 export default db

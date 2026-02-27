@@ -26,6 +26,10 @@ const DEFAULT = {
   zoneUnlockedMax: 1,
   zoneProgress: {},
   powerScoreCache: 0,
+  // Talent tree fields (PR21)
+  essence: 0,
+  talents: { idle: 0, gacha: 0, power: 0 },
+  essenceSpent: 0,
 }
 
 /**
@@ -61,5 +65,9 @@ export function usePlayer() {
     zoneUnlockedMax: player.zoneUnlockedMax ?? 1,
     zoneProgress: player.zoneProgress ?? {},
     powerScoreCache: player.powerScoreCache ?? 0,
+    // Talent tree fields (PR21)
+    essence:      player.essence      ?? 0,
+    talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
+    essenceSpent: player.essenceSpent ?? 0,
   }
 }
