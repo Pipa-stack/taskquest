@@ -62,6 +62,10 @@ describe('playerToPayload', () => {
       zoneUnlockedMax: 1,
       zoneProgress: {},
       powerScoreCache: 0,
+      // talent tree fields (defaults)
+      essence: 0,
+      talents: { idle: 0, gacha: 0, power: 0 },
+      essenceSpent: 0,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')
@@ -893,5 +897,168 @@ describe('playerRepository.claimZoneQuest', () => {
     const put = db.players.put.mock.calls[0][0]
     expect(put.zoneProgress[2]).toBeDefined()
     expect(put.zoneProgress[2].claimedRewards).toContain('z2_q3')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerToPayload – talent tree fields
+// ---------------------------------------------------------------------------
+describe('playerToPayload – talent tree fields', () => {
+  it('includes talent tree fields with explicit values', () => {
+    const player = {
+      id: 1,
+      xp: 100,
+      streak: 0,
+      lastActiveDate: null,
+      dailyGoal: 3,
+      rewardsUnlocked: [],
+      unlockedCharacters: [],
+      activeTeam: [],
+      updatedAt: '2024-06-01T10:00:00.000Z',
+      essence: 42,
+      talents: { idle: 3, gacha: 1, power: 0 },
+      essenceSpent: 7,
+    }
+    const payload = playerToPayload(player)
+    expect(payload.essence).toBe(42)
+    expect(payload.talents).toEqual({ idle: 3, gacha: 1, power: 0 })
+    expect(payload.essenceSpent).toBe(7)
+  })
+
+  it('applies safe defaults for missing talent tree fields', () => {
+    const payload = playerToPayload({ id: 1 })
+    expect(payload.essence).toBe(0)
+    expect(payload.talents).toEqual({ idle: 0, gacha: 0, power: 0 })
+    expect(payload.essenceSpent).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// playerRepository.spendEssenceOnTalent
+// ---------------------------------------------------------------------------
+describe('playerRepository.spendEssenceOnTalent', () => {
+  const basePlayer = {
+    id: 1,
+    xp: 0,
+    essence: 20,
+    talents: { idle: 0, gacha: 0, power: 0 },
+    essenceSpent: 0,
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    syncStatus: 'synced',
+  }
+
+  it('deducts essence and increments talent when player can afford it', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.spendEssenceOnTalent('idle')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    // cost for idle point #1 = 1
+    expect(put.essence).toBe(19)
+    expect(put.talents.idle).toBe(1)
+    expect(put.essenceSpent).toBe(1)
+    expect(put.syncStatus).toBe('pending')
+    expect(put.updatedAt).toBeDefined()
+  })
+
+  it('enqueues UPSERT_PLAYER outbox entry with correct payload', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.spendEssenceOnTalent('gacha')
+
+    expect(db.outbox.add).toHaveBeenCalledOnce()
+    const entry = db.outbox.add.mock.calls[0][0]
+    expect(entry.type).toBe('UPSERT_PLAYER')
+    expect(entry.status).toBe('pending')
+    expect(entry.retryCount).toBe(0)
+    expect(entry.payload.talents.gacha).toBe(1)
+    expect(entry.payload.essence).toBe(19)
+    expect(entry.payload.essenceSpent).toBe(1)
+  })
+
+  it('returns false and does not write when essence is insufficient', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, essence: 0 })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.spendEssenceOnTalent('power')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('returns false when talent branch is already at max level', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      talents: { idle: 10, gacha: 0, power: 0 },
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.spendEssenceOnTalent('idle')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+    expect(db.outbox.add).not.toHaveBeenCalled()
+  })
+
+  it('works for the gacha branch', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer, talents: { idle: 0, gacha: 2, power: 0 } })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.spendEssenceOnTalent('gacha')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.talents.gacha).toBe(3)
+    // cost for gacha point #3 = 3
+    expect(put.essence).toBe(basePlayer.essence - 3)
+  })
+
+  it('works for the power branch', async () => {
+    db.players.get.mockResolvedValue({ ...basePlayer })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    const ok = await playerRepository.spendEssenceOnTalent('power')
+
+    expect(ok).toBe(true)
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.talents.power).toBe(1)
+  })
+
+  it('creates a default player record if none exists', async () => {
+    db.players.get.mockResolvedValue(undefined)
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    // Default player has essence=0, so spend will fail (cannot afford)
+    const ok = await playerRepository.spendEssenceOnTalent('idle')
+
+    expect(ok).toBe(false)
+    expect(db.players.put).not.toHaveBeenCalled()
+  })
+
+  it('does not affect other talent branches', async () => {
+    db.players.get.mockResolvedValue({
+      ...basePlayer,
+      talents: { idle: 3, gacha: 5, power: 2 },
+    })
+    db.players.put.mockResolvedValue(undefined)
+    db.outbox.add.mockResolvedValue(1)
+
+    await playerRepository.spendEssenceOnTalent('gacha')
+
+    const put = db.players.put.mock.calls[0][0]
+    expect(put.talents.idle).toBe(3)
+    expect(put.talents.gacha).toBe(6)
+    expect(put.talents.power).toBe(2)
   })
 })

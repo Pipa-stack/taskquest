@@ -64,6 +64,10 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         zone_unlocked_max: p.zoneUnlockedMax ?? 1,
         zone_progress: p.zoneProgress ?? {},
         power_score_cache: p.powerScoreCache ?? 0,
+        // Talent tree fields (PR21)
+        essence:      p.essence      ?? 0,
+        talents:      p.talents      ?? {},
+        essence_spent: p.essenceSpent ?? 0,
       }
 
       const { error } = await supabase
@@ -145,6 +149,10 @@ export async function pullPlayerRemote({ supabase, userId }) {
         zoneUnlockedMax: data.zone_unlocked_max ?? 1,
         zoneProgress: data.zone_progress ?? {},
         powerScoreCache: data.power_score_cache ?? 0,
+        // Talent tree fields (PR21)
+        essence:      data.essence       ?? 0,
+        talents:      data.talents        ?? { idle: 0, gacha: 0, power: 0 },
+        essenceSpent: data.essence_spent  ?? 0,
       }
       await db.players.put(merged)
     }

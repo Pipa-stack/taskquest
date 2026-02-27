@@ -25,3 +25,17 @@ export const CHARACTERS = [
 export function getCharacter(id) {
   return CHARACTERS.find((c) => c.id === id)
 }
+
+/**
+ * Applies the talent evolve discount to a coin-based evolution cost.
+ *
+ * discountedCost = ceil(baseCost * (1 - evolveDiscount)), minimum 1.
+ *
+ * @param {number} baseCost       – original coin cost before discount
+ * @param {number} evolveDiscount – fraction discount from talent (0–0.4)
+ * @returns {number} discounted cost (integer, min 1)
+ */
+export function applyEvolveDiscount(baseCost, evolveDiscount) {
+  if (!evolveDiscount || evolveDiscount <= 0) return baseCost
+  return Math.max(1, Math.ceil(baseCost * (1 - evolveDiscount)))
+}
