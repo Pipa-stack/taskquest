@@ -182,4 +182,30 @@ db.version(7).stores({
   })
 })
 
+/**
+ * Schema v8
+ * ---------
+ * players gains prestige/ascension fields:
+ *   essence               – permanent currency earned via prestige (default 0)
+ *   prestigeCount         – number of times the player has prestiged (default 0)
+ *   globalMultiplierCache – cached global multiplier: 1 + essence × 0.02 (default 1)
+ *
+ * Supabase (run manually):
+ *   alter table public.player_state
+ *     add column if not exists essence int not null default 0,
+ *     add column if not exists prestige_count int not null default 0,
+ *     add column if not exists global_multiplier_cache float not null default 1;
+ */
+db.version(8).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.essence === undefined) player.essence = 0
+    if (player.prestigeCount === undefined) player.prestigeCount = 0
+    if (player.globalMultiplierCache === undefined) player.globalMultiplierCache = 1
+  })
+})
+
 export default db

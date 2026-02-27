@@ -64,6 +64,9 @@ export async function pushPlayerOutbox({ supabase, userId }) {
         zone_unlocked_max: p.zoneUnlockedMax ?? 1,
         zone_progress: p.zoneProgress ?? {},
         power_score_cache: p.powerScoreCache ?? 0,
+        essence: p.essence ?? 0,
+        prestige_count: p.prestigeCount ?? 0,
+        global_multiplier_cache: p.globalMultiplierCache ?? 1,
       }
 
       const { error } = await supabase
@@ -145,6 +148,9 @@ export async function pullPlayerRemote({ supabase, userId }) {
         zoneUnlockedMax: data.zone_unlocked_max ?? 1,
         zoneProgress: data.zone_progress ?? {},
         powerScoreCache: data.power_score_cache ?? 0,
+        essence: data.essence ?? 0,
+        prestigeCount: data.prestige_count ?? 0,
+        globalMultiplierCache: data.global_multiplier_cache ?? 1,
       }
       await db.players.put(merged)
     }
