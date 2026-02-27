@@ -1,4 +1,5 @@
 import db from '../db/db.js'
+import { clampPlayer } from '../domain/config.js'
 
 const PLAYER_LAST_PULLED_KEY = 'taskquest.playerLastPulledAt'
 const PUSH_BATCH_SIZE = 10
@@ -127,7 +128,7 @@ export async function pullPlayerRemote({ supabase, userId }) {
 
     if (shouldOverwritePlayer(local, data)) {
       // Spread local first to preserve non-synced fields (combo, lastCompleteAt, etc.)
-      const merged = {
+      const rawMerged = {
         ...(local ?? {}),
         id: 1,
         xp: data.xp ?? 0,
@@ -154,6 +155,22 @@ export async function pullPlayerRemote({ supabase, userId }) {
         talents:      data.talents        ?? { idle: 0, gacha: 0, power: 0 },
         essenceSpent: data.essence_spent  ?? 0,
       }
+      // Guardrail: clamp numeric fields from remote to prevent corrupted data
+      const merged = clampPlayer(rawMerged)
+      // Re-apply non-clamped identity/metadata fields overwritten by clamp spread
+      merged.id = 1
+      merged.updatedAt = rawMerged.updatedAt
+      merged.syncStatus = 'synced'
+      merged.lastActiveDate = rawMerged.lastActiveDate
+      merged.rewardsUnlocked = rawMerged.rewardsUnlocked
+      merged.unlockedCharacters = rawMerged.unlockedCharacters
+      merged.activeTeam = rawMerged.activeTeam
+      merged.lastIdleTickAt = rawMerged.lastIdleTickAt
+      merged.currentZone = rawMerged.currentZone
+      merged.zoneUnlockedMax = rawMerged.zoneUnlockedMax
+      merged.zoneProgress = rawMerged.zoneProgress
+      merged.powerScoreCache = rawMerged.powerScoreCache
+      merged.talents = rawMerged.talents
       await db.players.put(merged)
     }
 

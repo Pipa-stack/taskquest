@@ -7,52 +7,39 @@
  *  - instant boosts: applied immediately (energy_refill), no expiresAt
  *
  * All functions are pure (no DB access).
- */
-
-/** Duration constants in milliseconds */
-const MIN_30  = 30  * 60 * 1_000
-const HOUR_2  = 120 * 60 * 1_000
-const HOUR_24 = 24  * 60 * 60 * 1_000
-
-/**
- * Boost catalog.
  *
- * Fields:
- *   id             – stable string identifier
- *   cost           – coins required to buy
- *   label          – display name
- *   durationMs     – duration in milliseconds (undefined for instant boosts)
- *   coinMultiplier – multiplier applied to coin earnings (undefined if not applicable)
- *   energyCapBonus – bonus added to energyCap (undefined if not applicable)
- *   instant        – true for boosts applied immediately without a timer
+ * Costs are defined in src/domain/config.js (BOOST_CFG) — edit there for balance.
  */
+
+import { BOOST_CFG } from './config.js'
+
 export const BOOST_CATALOG = [
   {
     id: 'coin_x2_30m',
-    cost: 120,
+    cost: BOOST_CFG.coin_x2_30m.cost,
     label: '×2 monedas (30 min)',
-    durationMs: MIN_30,
-    coinMultiplier: 2,
+    durationMs: BOOST_CFG.coin_x2_30m.durationMs,
+    coinMultiplier: BOOST_CFG.coin_x2_30m.coinMultiplier,
   },
   {
     id: 'coin_x2_2h',
-    cost: 380,
+    cost: BOOST_CFG.coin_x2_2h.cost,
     label: '×2 monedas (2 h)',
-    durationMs: HOUR_2,
-    coinMultiplier: 2,
+    durationMs: BOOST_CFG.coin_x2_2h.durationMs,
+    coinMultiplier: BOOST_CFG.coin_x2_2h.coinMultiplier,
   },
   {
     id: 'energy_cap_plus50_24h',
-    cost: 250,
+    cost: BOOST_CFG.energy_cap_plus50_24h.cost,
     label: '+50 energía máxima (24 h)',
-    durationMs: HOUR_24,
-    energyCapBonus: 50,
+    durationMs: BOOST_CFG.energy_cap_plus50_24h.durationMs,
+    energyCapBonus: BOOST_CFG.energy_cap_plus50_24h.energyCapBonus,
   },
   {
     id: 'energy_refill',
-    cost: 90,
+    cost: BOOST_CFG.energy_refill.cost,
     label: 'Rellenar energía al máximo',
-    instant: true,
+    instant: BOOST_CFG.energy_refill.instant,
   },
 ]
 

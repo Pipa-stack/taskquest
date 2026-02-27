@@ -623,7 +623,7 @@ describe('playerRepository.buyBoost', () => {
     const put = db.players.put.mock.calls[0][0]
     // energy should be refilled to energyCap (100)
     expect(put.energy).toBe(100)
-    expect(put.coins).toBe(200 - 90) // cost 90
+    expect(put.coins).toBe(200 - 75) // cost 75 (updated in config.js PR24)
   })
 
   it('deduplicates timed boosts: buying same boost replaces the old one', async () => {
@@ -643,7 +643,7 @@ describe('playerRepository.buyBoost', () => {
   })
 
   it('coins never go below 0', async () => {
-    db.players.get.mockResolvedValue({ ...basePlayer, coins: 90 }) // exact cost for energy_refill
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 75 }) // exact cost for energy_refill (PR24: 75)
     db.players.put.mockResolvedValue(undefined)
     db.outbox.add.mockResolvedValue(1)
 
@@ -764,14 +764,14 @@ describe('playerRepository.unlockZone', () => {
     db.players.put.mockResolvedValue(undefined)
     db.outbox.add.mockResolvedValue(1)
 
-    // zone 2 requires power=20, cost=50 coins
+    // zone 2 requires power=20, cost=80 coins (updated in config.js PR24)
     const ok = await playerRepository.unlockZone(2, 20)
 
     expect(ok).toBe(true)
     const put = db.players.put.mock.calls[0][0]
     expect(put.zoneUnlockedMax).toBe(2)
     expect(put.currentZone).toBe(2)
-    expect(put.coins).toBe(1000 - 50) // zone 2 costs 50
+    expect(put.coins).toBe(1000 - 80) // zone 2 costs 80
     expect(put.coinsPerMinuteBase).toBeGreaterThan(1) // zone 2 bonus
     expect(put.syncStatus).toBe('pending')
     expect(db.outbox.add).toHaveBeenCalledOnce()
@@ -792,7 +792,7 @@ describe('playerRepository.unlockZone', () => {
   })
 
   it('returns false when coins are insufficient', async () => {
-    db.players.get.mockResolvedValue({ ...basePlayer, coins: 10 }) // zone 2 costs 50
+    db.players.get.mockResolvedValue({ ...basePlayer, coins: 10 }) // zone 2 costs 80 (PR24), 10 < 80
     db.players.put.mockResolvedValue(undefined)
     db.outbox.add.mockResolvedValue(1)
 

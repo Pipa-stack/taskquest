@@ -16,6 +16,7 @@ import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
+import DevPanel, { isDevMode } from './components/DevPanel.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -150,6 +151,7 @@ function App() {
   )
 
   const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
+  const devMode = isDevMode()
 
   return (
     <div className="app">
@@ -343,6 +345,11 @@ function App() {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
+
+      {/* Developer tools overlay — only rendered when dev mode is active */}
+      {devMode && (
+        <DevPanel player={player} powerScore={powerScore} />
+      )}
     </div>
   )
 }

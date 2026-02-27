@@ -6,7 +6,14 @@
  * Zone 1 is always unlocked by default.
  *
  * Each zone grants a permanent coinsPerMinuteBonus when unlocked.
+ *
+ * Economy numbers (costs, power requirements) are sourced from ZONE_ECONOMY in
+ * src/domain/config.js — edit there for balance adjustments.
  */
+
+import { ZONE_ECONOMY } from './config.js'
+
+const _e = ZONE_ECONOMY
 
 export const ZONE_CATALOG = [
   {
@@ -14,9 +21,9 @@ export const ZONE_CATALOG = [
     name: 'Bosque Inicial',
     emoji: '🌲',
     themeColor: '#4ade80',
-    requiredPower: 0,
-    unlockCostCoins: 0,
-    coinsPerMinuteBonus: 0,
+    requiredPower: _e[1].requiredPower,
+    unlockCostCoins: _e[1].unlockCostCoins,
+    coinsPerMinuteBonus: _e[1].coinsPerMinuteBonus,
     packReward: null,
   },
   {
@@ -24,9 +31,9 @@ export const ZONE_CATALOG = [
     name: 'Cavernas Oscuras',
     emoji: '⛏️',
     themeColor: '#94a3b8',
-    requiredPower: 20,
-    unlockCostCoins: 50,
-    coinsPerMinuteBonus: 1,
+    requiredPower: _e[2].requiredPower,
+    unlockCostCoins: _e[2].unlockCostCoins,
+    coinsPerMinuteBonus: _e[2].coinsPerMinuteBonus,
     packReward: 'starter',
   },
   {
@@ -34,9 +41,9 @@ export const ZONE_CATALOG = [
     name: 'Fortaleza de Piedra',
     emoji: '🏰',
     themeColor: '#f97316',
-    requiredPower: 55,
-    unlockCostCoins: 150,
-    coinsPerMinuteBonus: 2,
+    requiredPower: _e[3].requiredPower,
+    unlockCostCoins: _e[3].unlockCostCoins,
+    coinsPerMinuteBonus: _e[3].coinsPerMinuteBonus,
     packReward: 'starter',
   },
   {
@@ -44,9 +51,9 @@ export const ZONE_CATALOG = [
     name: 'Torre Arcana',
     emoji: '🔮',
     themeColor: '#a78bfa',
-    requiredPower: 100,
-    unlockCostCoins: 300,
-    coinsPerMinuteBonus: 3,
+    requiredPower: _e[4].requiredPower,
+    unlockCostCoins: _e[4].unlockCostCoins,
+    coinsPerMinuteBonus: _e[4].coinsPerMinuteBonus,
     packReward: 'boost',
   },
   {
@@ -54,9 +61,9 @@ export const ZONE_CATALOG = [
     name: 'Abismo Eterno',
     emoji: '💀',
     themeColor: '#ef4444',
-    requiredPower: 180,
-    unlockCostCoins: 600,
-    coinsPerMinuteBonus: 4,
+    requiredPower: _e[5].requiredPower,
+    unlockCostCoins: _e[5].unlockCostCoins,
+    coinsPerMinuteBonus: _e[5].coinsPerMinuteBonus,
     packReward: 'boost',
   },
   {
@@ -64,9 +71,9 @@ export const ZONE_CATALOG = [
     name: 'Cima del Mundo',
     emoji: '⭐',
     themeColor: '#fbbf24',
-    requiredPower: 300,
-    unlockCostCoins: 1000,
-    coinsPerMinuteBonus: 5,
+    requiredPower: _e[6].requiredPower,
+    unlockCostCoins: _e[6].unlockCostCoins,
+    coinsPerMinuteBonus: _e[6].coinsPerMinuteBonus,
     packReward: 'mega',
   },
 ]
