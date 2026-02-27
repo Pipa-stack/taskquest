@@ -2,15 +2,18 @@
  * Talent tree domain logic for TaskQuest.
  *
  * Players spend Essence to buy talent points across 3 branches:
- *   idle  – boosts passive coin generation and energy cap
+ *   idle  – boosts passive coin generation, energy cap and energy regen
  *   gacha – improves rare drop rates and reduces pity threshold
- *   power – amplifies combat power and reduces evolution costs
+ *   power – amplifies combat power, boost duration and reduces evolution costs
  *
  * All functions are pure (no side effects, no DB access).
  */
 
 /** Maximum points per talent branch. */
 export const TALENT_MAX = 10
+
+/** Milestone breakpoints within each branch. */
+export const MILESTONE_THRESHOLDS = [3, 6, 10]
 
 /**
  * Returns the essence cost for purchasing the next point in a branch.
@@ -36,28 +39,52 @@ export function totalCost(points) {
 }
 
 /**
+ * Returns how many milestones (3 / 6 / 10) have been reached for a branch level.
+ * Maximum is 3 (one per threshold).
+ *
+ * @param {number} level – current branch level (0–10)
+ * @returns {number} 0 – 3
+ */
+export function milestonesReached(level) {
+  return MILESTONE_THRESHOLDS.filter((t) => level >= t).length
+}
+
+/**
  * Computes all talent bonuses from current talent levels.
  *
- * Idle branch:
- *   idleCoinMult     = 1 + idle * 0.03     (e.g. idle=3 → 1.09)
- *   energyCapBonus   = floor(idle/3) * 5   (every 3 points: +5 cap)
+ * Idle branch (economía):
+ *   idleCoinMult      = 1 + idle * 0.10 + idleMilestones * 0.01
+ *                       (e.g. idle=10 → 2.03 with all 3 milestones)
+ *   energyCapBonus    = idle * 10 + powerMilestones * 10
+ *                       (e.g. idle=10 → +100; each power milestone adds +10 cap)
+ *   energyRegenPerMin = idle * 0.5   (+0.5 energy/min per idle point)
  *
- * Gacha branch:
- *   gachaRareBonus   = gacha * 0.01        (added to rare+ drop rates)
- *   pityReduction    = floor(gacha/2)      (subtracted from pity max, min 20)
+ * Gacha branch (suerte):
+ *   gachaRareBonus    = gacha * 0.01   (added to rare+ drop rates)
+ *   pityReduction     = floor(gacha/2) + gachaMilestones
+ *                       (milestone: -1 pity each; effective pity floor is ~20)
  *
- * Power branch:
- *   powerMult        = 1 + power * 0.04   (e.g. power=5 → 1.20)
- *   evolveDiscount   = min(0.4, floor(power/3)*0.05) (up to 40% off evolution costs)
+ * Power branch (energía):
+ *   powerMult         = 1 + power * 0.04   (e.g. power=5 → 1.20)
+ *   evolveDiscount    = min(0.4, floor(power/3)*0.05)
+ *   boostDurationMult = 1 + power * 0.05   (+5% boost duration per point)
+ *
+ * Also returns milestone counts for UI:
+ *   idleMilestones, gachaMilestones, powerMilestones (0–3 each)
  *
  * @param {{ idle?: number, gacha?: number, power?: number }} talents
  * @returns {{
  *   idleCoinMult: number,
  *   energyCapBonus: number,
+ *   energyRegenPerMin: number,
  *   gachaRareBonus: number,
  *   pityReduction: number,
  *   powerMult: number,
  *   evolveDiscount: number,
+ *   boostDurationMult: number,
+ *   idleMilestones: number,
+ *   gachaMilestones: number,
+ *   powerMilestones: number,
  * }}
  */
 export function computeTalentBonuses(talents) {
@@ -65,13 +92,48 @@ export function computeTalentBonuses(talents) {
   const gacha = Math.max(0, Math.floor(talents?.gacha ?? 0))
   const power = Math.max(0, Math.floor(talents?.power ?? 0))
 
+  const idleMilestones  = milestonesReached(idle)
+  const gachaMilestones = milestonesReached(gacha)
+  const powerMilestones = milestonesReached(power)
+
   return {
-    idleCoinMult:   1 + idle * 0.03,
-    energyCapBonus: Math.floor(idle / 3) * 5,
-    gachaRareBonus: gacha * 0.01,
-    pityReduction:  Math.floor(gacha / 2),
-    powerMult:      1 + power * 0.04,
-    evolveDiscount: Math.min(0.4, Math.floor(power / 3) * 0.05),
+    // Idle branch
+    idleCoinMult:      1 + idle * 0.10 + idleMilestones * 0.01,
+    energyCapBonus:    idle * 10 + powerMilestones * 10,
+    energyRegenPerMin: idle * 0.5,
+    // Gacha branch
+    gachaRareBonus:    gacha * 0.01,
+    pityReduction:     Math.floor(gacha / 2) + gachaMilestones,
+    // Power branch
+    powerMult:         1 + power * 0.04,
+    evolveDiscount:    Math.min(0.4, Math.floor(power / 3) * 0.05),
+    boostDurationMult: 1 + power * 0.05,
+    // Milestone counts (for UI indicators)
+    idleMilestones,
+    gachaMilestones,
+    powerMilestones,
+  }
+}
+
+/**
+ * Returns milestone status for each branch (useful for rendering milestone pips in the UI).
+ *
+ * @param {{ idle?: number, gacha?: number, power?: number }} talents
+ * @returns {{
+ *   idle:  Array<{ threshold: number, reached: boolean }>,
+ *   gacha: Array<{ threshold: number, reached: boolean }>,
+ *   power: Array<{ threshold: number, reached: boolean }>,
+ * }}
+ */
+export function computeTalentMilestones(talents) {
+  const idle  = Math.max(0, Math.floor(talents?.idle  ?? 0))
+  const gacha = Math.max(0, Math.floor(talents?.gacha ?? 0))
+  const power = Math.max(0, Math.floor(talents?.power ?? 0))
+
+  return {
+    idle:  MILESTONE_THRESHOLDS.map((t) => ({ threshold: t, reached: idle  >= t })),
+    gacha: MILESTONE_THRESHOLDS.map((t) => ({ threshold: t, reached: gacha >= t })),
+    power: MILESTONE_THRESHOLDS.map((t) => ({ threshold: t, reached: power >= t })),
   }
 }
 

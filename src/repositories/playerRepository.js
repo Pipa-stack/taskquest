@@ -352,6 +352,7 @@ export const playerRepository = {
         baseCpm: player.coinsPerMinuteBase ?? 1,
         multiplier: effectiveMultiplier,
         activeBoosts,
+        energyRegenPerMin: talentBonuses.energyRegenPerMin ?? 0,
       })
 
       result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed }
@@ -424,7 +425,10 @@ export const playerRepository = {
         const effectiveCap = applyBoostsToCaps(newEnergyCap, activeBoosts)
         newEnergy = effectiveCap
       } else {
-        const expiresAt = nowMs + boostDef.durationMs
+        // Apply boostDurationMult from talent bonuses to extend boost duration
+        const talentBonuses = computeTalentBonuses(player.talents ?? {})
+        const durationMs = Math.floor(boostDef.durationMs * talentBonuses.boostDurationMult)
+        const expiresAt = nowMs + durationMs
         // Deduplicate: remove any existing entry for same boost id before adding
         newBoosts = newBoosts.filter((b) => b.id !== boostId)
         newBoosts.push({

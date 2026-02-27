@@ -303,6 +303,8 @@ function App() {
                 <TalentTree
                   essence={player.essence}
                   talents={player.talents}
+                  coinsPerMinuteBase={player.coinsPerMinuteBase}
+                  energyCap={player.energyCap}
                   onNotify={addNotification}
                 />
               </motion.div>
@@ -327,6 +329,7 @@ function App() {
             coinsPerMinuteBase={player.coinsPerMinuteBase}
             currentZone={player.currentZone}
             powerScore={powerScore}
+            talents={player.talents}
             onNotify={addNotification}
             onNavigateToMap={() => setActiveTab('Mapa')}
           />

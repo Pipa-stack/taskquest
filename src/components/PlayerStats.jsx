@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { XP_PER_LEVEL } from '../domain/gamification.js'
 import { getCharacter } from '../domain/characters.js'
 import { getActiveBoosts, applyBoostsToCaps, getBoost } from '../domain/boosts.js'
+import { computeTalentBonuses } from '../domain/talents.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -14,7 +15,7 @@ import { playerRepository } from '../repositories/playerRepository.js'
 export default function PlayerStats({
   xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam,
   coins, energy, energyCap, boosts, coinsPerMinuteBase,
-  currentZone, powerScore,
+  currentZone, powerScore, talents,
   onNotify, onNavigateToMap,
 }) {
   const xpIntoLevel = XP_PER_LEVEL - xpToNext
@@ -34,16 +35,29 @@ export default function PlayerStats({
 
   const showCombo = combo > 1.0
 
+  // Talent bonuses
+  const talentBonuses = computeTalentBonuses(talents ?? {})
+
   // Idle farming derived values
   const nowMs = Date.now()
   const activeBoostList = getActiveBoosts(boosts ?? [], nowMs)
-  const effectiveEnergyCap = applyBoostsToCaps(energyCap ?? 100, activeBoostList)
+  const effectiveEnergyCap = applyBoostsToCaps(
+    (energyCap ?? 100) + talentBonuses.energyCapBonus,
+    activeBoostList,
+  )
   const energyPct = effectiveEnergyCap > 0 ? Math.round(((energy ?? 100) / effectiveEnergyCap) * 100) : 100
 
   // Find the active coin boost with the highest multiplier (for display)
   const activeCoinBoost = activeBoostList
     .filter((b) => b.coinMultiplier)
     .sort((a, b) => b.coinMultiplier - a.coinMultiplier)[0] ?? null
+
+  // Effective coins/min breakdown
+  const baseCpm        = coinsPerMinuteBase ?? 1
+  const talentMult     = talentBonuses.idleCoinMult
+  const boostMult      = activeCoinBoost?.coinMultiplier ?? 1
+  const effectiveCpm   = +(baseCpm * talentMult * boostMult).toFixed(2)
+  const energyRegenMin = talentBonuses.energyRegenPerMin
 
   const handleGoalChange = async (e) => {
     const newGoal = Number(e.target.value)
@@ -133,13 +147,28 @@ export default function PlayerStats({
           <span className="idle-label">🪙 Monedas:</span>
           <span className="idle-value">{coins ?? 0}</span>
         </div>
+
+        {/* Effective coins/min with breakdown */}
         <div className="idle-row">
-          <span className="idle-label">Monedas/min:</span>
+          <span className="idle-label">Coins/min efectivo:</span>
           <span className="idle-value">
-            {coinsPerMinuteBase ?? 1}
+            <motion.span
+              key={effectiveCpm}
+              initial={{ color: '#4ade80' }}
+              animate={{ color: '#e2e2e7' }}
+              transition={{ duration: 0.8 }}
+            >
+              {effectiveCpm}
+            </motion.span>
             {activeCoinBoost && (
               <span className="boost-active-badge"> ×{activeCoinBoost.coinMultiplier}</span>
             )}
+          </span>
+        </div>
+        {/* Breakdown: base × talent × boost */}
+        <div className="idle-cpm-breakdown">
+          <span title="Base × Talento × Boost">
+            {baseCpm} × {talentMult.toFixed(2)} × {boostMult} = {effectiveCpm}
           </span>
         </div>
 
@@ -163,6 +192,12 @@ export default function PlayerStats({
               transition={{ type: 'spring', stiffness: 80, damping: 20 }}
             />
           </div>
+          {/* Energy regen badge */}
+          {energyRegenMin > 0 && (
+            <div className="idle-regen-badge">
+              🔋 Regen: +{energyRegenMin.toFixed(1)} energía/min
+            </div>
+          )}
         </div>
 
         {/* Active boost display */}
