@@ -11,6 +11,9 @@
 /** Default pity threshold (guaranteed rare+ after this many pulls). */
 export const PITY_DEFAULT = 30
 
+/** Base coin cost for one gacha pack pull. */
+export const GACHA_PACK_COST = 50
+
 /** Minimum pity threshold after talent reductions. */
 export const PITY_MIN = 20
 
@@ -62,6 +65,28 @@ export function applyGachaRareBonus(baseRates, gachaRareBonus) {
   const rates = { ...baseRates }
   rates.rare = (rates.rare ?? 0) + gachaRareBonus
   return normalizeRates(rates)
+}
+
+/**
+ * Picks a rarity from a normalised rates table using a uniform random value.
+ *
+ * Iterates entries in insertion order, accumulating probabilities until the
+ * random value is exceeded. Because rates sum to 1.0 the last entry is always
+ * the fallback.
+ *
+ * @param {{ [rarity: string]: number }} rates  – normalised rates (values sum to ~1)
+ * @param {number} [rand=Math.random()]         – uniform [0, 1) random value; injectable for tests
+ * @returns {string} the chosen rarity key
+ */
+export function pickRarity(rates, rand = Math.random()) {
+  let cumulative = 0
+  const entries = Object.entries(rates)
+  for (const [rarity, prob] of entries) {
+    cumulative += prob
+    if (rand < cumulative) return rarity
+  }
+  // Fallback: last key (handles floating-point rounding at rand ≈ 1)
+  return entries[entries.length - 1][0]
 }
 
 /**

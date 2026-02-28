@@ -56,10 +56,11 @@ export default function PlayerStats({
   }
 
   const handleTickIdle = async () => {
-    const { coinsEarned } = await playerRepository.tickIdle(Date.now())
+    const { coinsEarned, freeClaimUsed } = await playerRepository.tickIdle(Date.now(), 1, { fromManual: true })
     if (onNotify) {
+      const suffix = freeClaimUsed ? ' (sin gastar energía 🔋)' : ''
       onNotify(coinsEarned > 0
-        ? `+${coinsEarned} monedas reclamadas`
+        ? `+${coinsEarned} monedas reclamadas${suffix}`
         : 'Sin monedas que reclamar'
       )
     }

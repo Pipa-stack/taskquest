@@ -4,8 +4,13 @@ import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
 import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
-import { getActiveEvents, applyEventModifiers, canClaimEventBonus, EVENT_CLAIM_BONUS } from '../domain/events.js'
+import {
+  getActiveEvents, applyEventModifiers,
+  canClaimEventBonus, canUseGachaDiscount, canUseFreeIdleClaim,
+  computeDailyClaimReward,
+} from '../domain/events.js'
 import { todayKey } from '../domain/dateKey.js'
+import { applyGachaRareBonus, BASE_RATES, pickRarity, GACHA_PACK_COST } from '../domain/gacha.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -36,8 +41,11 @@ export function playerToPayload(player) {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
-    // Events system (PR26) — safe default, no schema migration needed
-    lastEventClaimDate: player.lastEventClaimDate ?? null,
+    // Events system (PR26/PR26b) — safe defaults, no schema migration needed
+    lastEventClaimDate:    player.lastEventClaimDate    ?? null,
+    lastGachaDiscountDate: player.lastGachaDiscountDate ?? null,
+    lastFreeIdleClaimDate: player.lastFreeIdleClaimDate ?? null,
+    dust:                  player.dust                  ?? 0,
   }
 }
 
@@ -308,21 +316,20 @@ export const playerRepository = {
    * Processes one idle tick: computes earnings since last tick, adds coins,
    * decreases energy, and updates lastIdleTickAt. Enqueues UPSERT_PLAYER.
    *
-   * - Uses computeIdleEarnings for the math (pure domain function).
-   * - Active boosts are filtered before passing to computeIdleEarnings.
-   * - A team multiplier of 1.0 is used here; callers can pre-compute it
-   *   using calcTeamMultiplier and pass it via the `multiplier` field on player
-   *   if desired — but for simplicity the repository uses 1.0 as default.
-   *   The actual team multiplier is computed in the UI layer and can be passed
-   *   as an optional param.
+   * opts.fromManual — when true (manual claim button press), the Thursday
+   *   energy_thursday free-idle-claim benefit is applied if not yet used today:
+   *   earnings are computed at full energy cap so energy is never the limiting
+   *   factor, and the energy balance is left unchanged for that tick.
    *
-   * @param {number} nowMs – current timestamp in milliseconds (e.g. Date.now())
+   * @param {number} nowMs              – current timestamp in ms
    * @param {number} [teamMultiplier=1] – pre-computed team multiplier
-   * @returns {Promise<{ coinsEarned: number, minutesUsed: number }>}
+   * @param {{ fromManual?: boolean }} [opts={}]
+   * @returns {Promise<{ coinsEarned: number, minutesUsed: number, freeClaimUsed: boolean }>}
    */
-  async tickIdle(nowMs, teamMultiplier = 1) {
+  async tickIdle(nowMs, teamMultiplier = 1, opts = {}) {
     const nowISO = new Date(nowMs).toISOString()
-    let result = { coinsEarned: 0, minutesUsed: 0 }
+    const today  = todayKey()
+    let result = { coinsEarned: 0, minutesUsed: 0, freeClaimUsed: false }
 
     await db.transaction('rw', [db.players, db.outbox], async () => {
       const player = (await db.players.get(1)) ?? {
@@ -342,7 +349,7 @@ export const playerRepository = {
       // Apply talent bonuses on top of base caps and multipliers
       const talentBonuses = computeTalentBonuses(player.talents ?? {})
       // Event modifiers (deterministic, pure — no async needed)
-      const eventMods = applyEventModifiers({}, getActiveEvents(todayKey()))
+      const eventMods = applyEventModifiers({}, getActiveEvents(today))
       const effectiveEnergyCap = applyBoostsToCaps(
         (player.energyCap ?? 100) + talentBonuses.energyCapBonus + eventMods.energyCapBonus,
         activeBoosts,
@@ -350,26 +357,40 @@ export const playerRepository = {
       const effectiveMultiplier =
         teamMultiplier * talentBonuses.idleCoinMult * (player.globalMultiplierCache ?? 1) * eventMods.idleCpmMultiplier
 
+      // Thursday free-idle-claim: manual claim skips energy consumption once/day
+      const isFreeIdleClaim = !!(
+        opts.fromManual &&
+        eventMods.freeIdleClaimOncePerDay &&
+        canUseFreeIdleClaim(player, today)
+      )
+
+      // When free, use effectiveEnergyCap so energy is never the limiting factor
+      const energyForCompute = isFreeIdleClaim ? effectiveEnergyCap : (player.energy ?? 100)
+
       const earnings = computeIdleEarnings({
         now: nowMs,
         lastTickAt: player.lastIdleTickAt != null ? new Date(player.lastIdleTickAt).getTime() : null,
-        energy: player.energy ?? 100,
+        energy: energyForCompute,
         energyCap: effectiveEnergyCap,
         baseCpm: player.coinsPerMinuteBase ?? 1,
         multiplier: effectiveMultiplier,
         activeBoosts,
       })
 
-      result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed }
+      // Restore original energy if this was a free claim (no deduction)
+      const finalEnergy = isFreeIdleClaim ? (player.energy ?? 100) : earnings.newEnergy
+
+      result = { coinsEarned: earnings.coinsEarned, minutesUsed: earnings.minutesUsed, freeClaimUsed: isFreeIdleClaim }
 
       const updated = {
         ...player,
         id: 1,
         coins: Math.max(0, (player.coins ?? 0) + earnings.coinsEarned),
-        energy: earnings.newEnergy,
+        energy: finalEnergy,
         // Prune expired boosts to keep the array tidy
         boosts: activeBoosts,
         lastIdleTickAt: new Date(earnings.newLastTickAt).toISOString(),
+        ...(isFreeIdleClaim && { lastFreeIdleClaimDate: today }),
         updatedAt: nowISO,
         syncStatus: 'pending',
       }
@@ -616,24 +637,85 @@ export const playerRepository = {
   },
 
   /**
-   * Claims the once-per-day event bonus if the player qualifies.
+   * Pulls one gacha pack, spending coins.
+   *
+   * On gacha_tuesday, the first pull of the day costs 20 % less (once/day).
+   * Uses talent + event gacha-rare-bonus for the effective drop rates.
+   *
+   * @param {number} [nowMs=Date.now()]
+   * @returns {Promise<{ rarity: string, coinsSpent: number, discountApplied: boolean }|false>}
+   *   false if insufficient coins or unknown error
+   */
+  async pullGacha(nowMs = Date.now()) {
+    const today  = todayKey()
+    const nowISO = new Date(nowMs).toISOString()
+    let result   = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, coins: 0 }
+
+      const activeEvents  = getActiveEvents(today)
+      const eventMods     = applyEventModifiers({}, activeEvents)
+      const talentBonuses = computeTalentBonuses(player.talents ?? {})
+
+      // First-pack discount (gacha_tuesday, once per day)
+      const discountApplied = canUseGachaDiscount(player, today) && eventMods.gachaFirstPackDiscount > 0
+      const effectiveCost   = discountApplied
+        ? Math.max(1, Math.ceil(GACHA_PACK_COST * (1 - eventMods.gachaFirstPackDiscount)))
+        : GACHA_PACK_COST
+
+      if ((player.coins ?? 0) < effectiveCost) return
+
+      // Effective drop rates: talent bonus + event bonus, re-normalised inside applyGachaRareBonus
+      const combinedRareBonus = talentBonuses.gachaRareBonus + eventMods.gachaRareBonus
+      const rates  = applyGachaRareBonus(BASE_RATES, combinedRareBonus)
+      const rarity = pickRarity(rates)
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) - effectiveCost),
+        ...(discountApplied && { lastGachaDiscountDate: today }),
+        updatedAt: nowISO,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: nowISO,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      result = { rarity, coinsSpent: effectiveCost, discountApplied }
+    })
+
+    return result
+  },
+
+  /**
+   * Claims the once-per-day themed event bonus if the player qualifies.
+   *
+   * Reward is determined by the active daily event type:
+   *   gacha_*   → +25 dust
+   *   boost_*   → +10 min on active coin boost (or +25 coins fallback)
+   *   energy_*  → +20 energy (clamped to cap)
+   *   default   → coins × taskCoinMultiplier
    *
    * Requirements:
-   *  - player.lastEventClaimDate !== dateKey  (anti-duplication)
-   *  - todayTasksCount >= 1  (must have completed at least one task today)
+   *   - player.lastEventClaimDate !== dateKey  (anti-duplication, once/day)
+   *   - todayTasksCount >= 1
    *
-   * On success: adds EVENT_CLAIM_BONUS coins (scaled by event taskCoinMultiplier),
-   * sets lastEventClaimDate = dateKey, and enqueues UPSERT_PLAYER.
-   *
-   * @param {string} dateKey        – today's YYYY-MM-DD key
-   * @param {number} todayTasksCount – number of tasks completed today
-   * @returns {Promise<number|false>} bonus coins awarded, or false if not eligible
+   * @param {string} dateKey
+   * @param {number} todayTasksCount
+   * @param {number} [nowMs=Date.now()]
+   * @returns {Promise<{ coinsDelta, dustDelta, energyDelta, boostExtendMs, message }|false>}
    */
-  async claimEventBonus(dateKey, todayTasksCount) {
+  async claimDailyEventBonus(dateKey, todayTasksCount, nowMs = Date.now()) {
     if (todayTasksCount < 1) return false
 
-    const now = new Date().toISOString()
-    let bonusAwarded = false
+    const now = new Date(nowMs).toISOString()
+    let result = false
 
     await db.transaction('rw', [db.players, db.outbox], async () => {
       const player = (await db.players.get(1)) ?? { id: 1, xp: 0, coins: 0 }
@@ -641,13 +723,34 @@ export const playerRepository = {
       if (!canClaimEventBonus(player, dateKey)) return
 
       const activeEvents = getActiveEvents(dateKey)
-      const eventMods = applyEventModifiers({}, activeEvents)
-      const bonus = Math.max(1, Math.floor(EVENT_CLAIM_BONUS * eventMods.taskCoinMultiplier))
+      const reward       = computeDailyClaimReward(activeEvents, player, nowMs)
+
+      let newCoins  = (player.coins  ?? 0) + reward.coinsDelta
+      let newDust   = (player.dust   ?? 0) + reward.dustDelta
+      let newEnergy = (player.energy ?? 0) + reward.energyDelta
+      let newBoosts = [...(player.boosts ?? [])]
+
+      // Clamp energy to effective cap
+      const eventMods    = applyEventModifiers({}, activeEvents)
+      const effectiveCap = (player.energyCap ?? 100) + eventMods.energyCapBonus
+      newEnergy = Math.min(newEnergy, effectiveCap)
+
+      // Extend active coin boosts if the reward says so
+      if (reward.boostExtendMs > 0) {
+        newBoosts = newBoosts.map((b) =>
+          b.coinMultiplier && b.expiresAt > nowMs
+            ? { ...b, expiresAt: b.expiresAt + reward.boostExtendMs }
+            : b,
+        )
+      }
 
       const updated = {
         ...player,
         id: 1,
-        coins: Math.max(0, (player.coins ?? 0) + bonus),
+        coins:             Math.max(0, newCoins),
+        dust:              Math.max(0, newDust),
+        energy:            Math.max(0, newEnergy),
+        boosts:            newBoosts,
         lastEventClaimDate: dateKey,
         updatedAt: now,
         syncStatus: 'pending',
@@ -660,10 +763,10 @@ export const playerRepository = {
         payload: playerToPayload(updated),
         retryCount: 0,
       })
-      bonusAwarded = bonus
+      result = reward
     })
 
-    return bonusAwarded
+    return result
   },
 
   async claimZoneQuest(zoneId, questId) {

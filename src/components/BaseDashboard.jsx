@@ -8,7 +8,10 @@ import { calcTeamMultiplier } from '../domain/idle.js'
 import { CHARACTERS } from '../domain/characters.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
-import { getActiveEvents, canClaimEventBonus, getEventEffectLines } from '../domain/events.js'
+import {
+  getActiveEvents, canClaimEventBonus, getEventEffectLines,
+  computeDailyClaimReward, getDailyRecommendation,
+} from '../domain/events.js'
 
 const QUICK_ACTIONS = [
   { label: 'Boosts',    icon: '🚀', tab: 'Boosts' },
@@ -60,14 +63,17 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
   // Active events (deterministic, no RNG)
   const activeEvents = getActiveEvents(today)
   const { daily: dailyEvent, weekly: weeklyEvent } = activeEvents
+
+  // Compute today's themed claim reward label (pure, no DB)
+  const previewReward = computeDailyClaimReward(activeEvents, player, Date.now())
   const eventClaimAvailable = !eventClaimState && canClaimEventBonus(player, today) && todayDone >= 1
 
   const handleEventClaim = async () => {
     if (!eventClaimAvailable) return
-    const bonus = await playerRepository.claimEventBonus(today, todayDone)
-    if (bonus) {
+    const reward = await playerRepository.claimDailyEventBonus(today, todayDone)
+    if (reward) {
       setEventClaimState('claimed')
-      onNotify?.(`🎉 +${bonus} monedas por evento diario`)
+      onNotify?.(`🎉 ${reward.message} por evento diario`)
       setTimeout(() => setEventClaimState(null), 3000)
     }
   }
@@ -179,9 +185,14 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
           </div>
         </div>
 
-        {/* Daily event claim button */}
+        {/* Recommendation line */}
+        <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: 'var(--c-dim, #aaa)', fontStyle: 'italic' }}>
+          {getDailyRecommendation(dailyEvent)}
+        </p>
+
+        {/* Daily event claim button — label shows themed reward */}
         {eventClaimState === 'claimed' ? (
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--c-green, #4ade80)', fontWeight: 600 }}>
+          <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--c-green, #4ade80)', fontWeight: 600 }}>
             ✓ ¡Bonus reclamado!
           </p>
         ) : canClaimEventBonus(player, today) ? (
@@ -190,7 +201,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             disabled={todayDone < 1}
             type="button"
             style={{
-              marginTop: '0.5rem',
+              marginTop: '0.35rem',
               width: '100%',
               padding: '0.45rem',
               borderRadius: '8px',
@@ -203,7 +214,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             }}
             title={todayDone < 1 ? 'Completa al menos 1 tarea para reclamar' : 'Reclamar bonus de evento (1 vez al día)'}
           >
-            🎁 Reclamar bonus diario {todayDone < 1 ? '(necesitas 1 tarea)' : '(+20 monedas)'}
+            🎁 Reclamar {previewReward.message}{todayDone < 1 ? ' (necesitas 1 tarea)' : ''}
           </button>
         ) : null}
       </div>

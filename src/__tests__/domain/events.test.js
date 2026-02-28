@@ -4,15 +4,22 @@ import {
   WEEKLY_EVENTS,
   BASE_TASK_COIN_REWARD,
   EVENT_CLAIM_BONUS,
+  EVENT_GACHA_DUST_BONUS,
+  EVENT_ENERGY_BONUS,
+  EVENT_BOOST_EXTEND_MS,
   getDailyEvent,
   getWeeklyEvent,
   getActiveEvents,
   applyEventModifiers,
   getEconomyWithEvents,
   canClaimEventBonus,
+  canUseGachaDiscount,
+  canUseFreeIdleClaim,
+  computeDailyClaimReward,
+  getDailyRecommendation,
   getEventEffectLines,
 } from '../../domain/events.js'
-import { applyGachaRareBonus, normalizeRates, BASE_RATES } from '../../domain/gacha.js'
+import { applyGachaRareBonus, normalizeRates, BASE_RATES, pickRarity } from '../../domain/gacha.js'
 
 // ── Catalog invariants ────────────────────────────────────────────────────────
 
@@ -488,5 +495,307 @@ describe('task coin reward with event modifier', () => {
     const mods = applyEventModifiers({}, {})
     const reward = Math.floor(BASE_TASK_COIN_REWARD * mods.taskCoinMultiplier)
     expect(reward).toBe(BASE_TASK_COIN_REWARD)
+  })
+})
+
+// ── New modifiers: gachaFirstPackDiscount & freeIdleClaimOncePerDay ───────────
+
+describe('applyEventModifiers — new modifier fields', () => {
+  it('returns gachaFirstPackDiscount = 0 when no event has it', () => {
+    const mods = applyEventModifiers({}, {})
+    expect(mods.gachaFirstPackDiscount).toBe(0)
+  })
+
+  it('returns gachaFirstPackDiscount from gacha_tuesday event', () => {
+    const event = { modifiers: { gachaFirstPackDiscount: 0.20 } }
+    const mods = applyEventModifiers({}, { daily: event })
+    expect(mods.gachaFirstPackDiscount).toBeCloseTo(0.20)
+  })
+
+  it('takes the max gachaFirstPackDiscount when both events provide it', () => {
+    const daily  = { modifiers: { gachaFirstPackDiscount: 0.20 } }
+    const weekly = { modifiers: { gachaFirstPackDiscount: 0.30 } }
+    const mods = applyEventModifiers({}, { daily, weekly })
+    expect(mods.gachaFirstPackDiscount).toBeCloseTo(0.30)
+  })
+
+  it('clamps gachaFirstPackDiscount to max 0.50', () => {
+    const event = { modifiers: { gachaFirstPackDiscount: 0.99 } }
+    const mods = applyEventModifiers({}, { daily: event })
+    expect(mods.gachaFirstPackDiscount).toBeLessThanOrEqual(0.50)
+  })
+
+  it('returns freeIdleClaimOncePerDay = false when no event has it', () => {
+    const mods = applyEventModifiers({}, {})
+    expect(mods.freeIdleClaimOncePerDay).toBe(false)
+  })
+
+  it('returns freeIdleClaimOncePerDay = true when energy_thursday event is active', () => {
+    const event = { modifiers: { freeIdleClaimOncePerDay: true } }
+    const mods = applyEventModifiers({}, { daily: event })
+    expect(mods.freeIdleClaimOncePerDay).toBe(true)
+  })
+
+  it('freeIdleClaimOncePerDay stays false when only numeric modifiers present', () => {
+    const event = { modifiers: { taskCoinMultiplier: 1.10, idleCpmMultiplier: 1.05 } }
+    const mods = applyEventModifiers({}, { daily: event })
+    expect(mods.freeIdleClaimOncePerDay).toBe(false)
+  })
+})
+
+// ── getEventEffectLines — new modifier lines ──────────────────────────────────
+
+describe('getEventEffectLines — new modifiers', () => {
+  it('shows gacha first-pack discount line', () => {
+    const event = { modifiers: { gachaFirstPackDiscount: 0.20 } }
+    const lines = getEventEffectLines(event)
+    expect(lines.some((l) => l.includes('20') && l.includes('pack'))).toBe(true)
+  })
+
+  it('shows free idle claim line', () => {
+    const event = { modifiers: { freeIdleClaimOncePerDay: true } }
+    const lines = getEventEffectLines(event)
+    expect(lines.some((l) => l.includes('idle'))).toBe(true)
+  })
+
+  it('gacha_tuesday event shows both rare bonus and pack discount', () => {
+    const event = DAILY_EVENTS[2] // Tuesday
+    expect(event.id).toBe('gacha_tuesday')
+    const lines = getEventEffectLines(event)
+    expect(lines.some((l) => l.includes('rare'))).toBe(true)
+    expect(lines.some((l) => l.includes('pack'))).toBe(true)
+  })
+
+  it('energy_thursday event shows both energyCap and free idle claim', () => {
+    const event = DAILY_EVENTS[4] // Thursday
+    expect(event.id).toBe('energy_thursday')
+    const lines = getEventEffectLines(event)
+    expect(lines.some((l) => l.includes('energía'))).toBe(true)
+    expect(lines.some((l) => l.includes('idle'))).toBe(true)
+  })
+})
+
+// ── canUseGachaDiscount ───────────────────────────────────────────────────────
+
+describe('canUseGachaDiscount', () => {
+  // 2026-03-03 is a Tuesday → gacha_tuesday (has gachaFirstPackDiscount)
+  const TUESDAY = '2026-03-03'
+  // 2026-03-04 is a Wednesday → boost_wednesday (no gachaFirstPackDiscount)
+  const WEDNESDAY = '2026-03-04'
+
+  it('returns true when on gacha_tuesday and discount never used', () => {
+    expect(canUseGachaDiscount({}, TUESDAY)).toBe(true)
+  })
+
+  it('returns true when on gacha_tuesday and lastGachaDiscountDate is a different day', () => {
+    expect(canUseGachaDiscount({ lastGachaDiscountDate: '2026-03-02' }, TUESDAY)).toBe(true)
+  })
+
+  it('returns false when lastGachaDiscountDate equals today (already used)', () => {
+    expect(canUseGachaDiscount({ lastGachaDiscountDate: TUESDAY }, TUESDAY)).toBe(false)
+  })
+
+  it('returns false on a non-gacha day (Wednesday has no gachaFirstPackDiscount)', () => {
+    expect(canUseGachaDiscount({}, WEDNESDAY)).toBe(false)
+  })
+
+  it('discount lock is per-dateKey — resets the next day', () => {
+    const player = { lastGachaDiscountDate: TUESDAY }
+    // Next Tuesday (7 days later) should be eligible again
+    expect(canUseGachaDiscount(player, '2026-03-10')).toBe(true)
+  })
+})
+
+// ── canUseFreeIdleClaim ───────────────────────────────────────────────────────
+
+describe('canUseFreeIdleClaim', () => {
+  // 2026-03-05 is a Thursday → energy_thursday (has freeIdleClaimOncePerDay)
+  const THURSDAY  = '2026-03-05'
+  // 2026-03-06 is a Friday (no free idle claim)
+  const FRIDAY    = '2026-03-06'
+
+  it('returns true when on energy_thursday and claim never used', () => {
+    expect(canUseFreeIdleClaim({}, THURSDAY)).toBe(true)
+  })
+
+  it('returns true when lastFreeIdleClaimDate is a different day', () => {
+    expect(canUseFreeIdleClaim({ lastFreeIdleClaimDate: '2026-03-04' }, THURSDAY)).toBe(true)
+  })
+
+  it('returns false when lastFreeIdleClaimDate equals today (already used)', () => {
+    expect(canUseFreeIdleClaim({ lastFreeIdleClaimDate: THURSDAY }, THURSDAY)).toBe(false)
+  })
+
+  it('returns false on a non-thursday day', () => {
+    expect(canUseFreeIdleClaim({}, FRIDAY)).toBe(false)
+  })
+})
+
+// ── computeDailyClaimReward ───────────────────────────────────────────────────
+
+describe('computeDailyClaimReward', () => {
+  const NOW = 1_750_000_000_000 // fixed timestamp
+
+  it('gacha event → dustDelta = EVENT_GACHA_DUST_BONUS, coinsDelta = 0', () => {
+    const daily = { id: 'gacha_tuesday', modifiers: { gachaRareBonus: 0.02, gachaFirstPackDiscount: 0.20 } }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, {}, NOW)
+    expect(reward.dustDelta).toBe(EVENT_GACHA_DUST_BONUS)
+    expect(reward.coinsDelta).toBe(0)
+    expect(reward.energyDelta).toBe(0)
+    expect(reward.boostExtendMs).toBe(0)
+  })
+
+  it('boost event with active coin boost → boostExtendMs = EVENT_BOOST_EXTEND_MS', () => {
+    const daily = { id: 'boost_wednesday', modifiers: { boostPriceMultiplier: 0.85 } }
+    const player = { boosts: [{ coinMultiplier: 2, expiresAt: NOW + 100_000 }] }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.boostExtendMs).toBe(EVENT_BOOST_EXTEND_MS)
+    expect(reward.coinsDelta).toBe(0)
+  })
+
+  it('boost event with NO active boost → coins fallback of 25', () => {
+    const daily = { id: 'boost_wednesday', modifiers: { boostPriceMultiplier: 0.85 } }
+    const player = { boosts: [] }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.coinsDelta).toBe(25)
+    expect(reward.boostExtendMs).toBe(0)
+  })
+
+  it('boost event with expired boost → falls back to coins', () => {
+    const daily = { id: 'boost_wednesday', modifiers: { boostPriceMultiplier: 0.85 } }
+    const player = { boosts: [{ coinMultiplier: 2, expiresAt: NOW - 1 }] } // expired
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.coinsDelta).toBe(25)
+  })
+
+  it('energy event → energyDelta clamped to available headroom', () => {
+    const daily = { id: 'energy_thursday', modifiers: { energyCapBonus: 10, freeIdleClaimOncePerDay: true } }
+    const player = { energy: 95, energyCap: 100 }
+    // effectiveCap = 100 + 10 = 110; headroom = 110 - 95 = 15; min(20, 15) = 15
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.energyDelta).toBe(15)
+    expect(reward.coinsDelta).toBe(0)
+  })
+
+  it('energy event → energyDelta is 0 when already at effective cap', () => {
+    const daily = { id: 'energy_thursday', modifiers: { energyCapBonus: 10 } }
+    const player = { energy: 110, energyCap: 100 }
+    // effectiveCap = 110; headroom = 0
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.energyDelta).toBe(0)
+  })
+
+  it('energy event → energyDelta never negative', () => {
+    const daily = { id: 'energy_thursday', modifiers: { energyCapBonus: 10 } }
+    const player = { energy: 150, energyCap: 100 } // above cap (edge case)
+    const reward = computeDailyClaimReward({ daily, weekly: null }, player, NOW)
+    expect(reward.energyDelta).toBeGreaterThanOrEqual(0)
+  })
+
+  it('default (coin event) → coinsDelta = floor(EVENT_CLAIM_BONUS * taskCoinMultiplier)', () => {
+    const daily = { id: 'golden_sunday', modifiers: { taskCoinMultiplier: 1.10 } }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, {}, NOW)
+    const expected = Math.max(1, Math.floor(EVENT_CLAIM_BONUS * 1.10))
+    expect(reward.coinsDelta).toBe(expected)
+    expect(reward.dustDelta).toBe(0)
+    expect(reward.energyDelta).toBe(0)
+  })
+
+  it('default (idle event) → gives coins', () => {
+    const daily = { id: 'monday_surge', modifiers: { idleCpmMultiplier: 1.12 } }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, {}, NOW)
+    expect(reward.coinsDelta).toBeGreaterThanOrEqual(1)
+  })
+
+  it('default → coinsDelta never below 1', () => {
+    const daily = { id: 'power_saturday', modifiers: { taskCoinMultiplier: 1.05 } }
+    const reward = computeDailyClaimReward({ daily, weekly: null }, {}, NOW)
+    expect(reward.coinsDelta).toBeGreaterThanOrEqual(1)
+  })
+
+  it('message field is always a non-empty string', () => {
+    for (const event of DAILY_EVENTS) {
+      const reward = computeDailyClaimReward({ daily: event, weekly: null }, {}, NOW)
+      expect(typeof reward.message).toBe('string')
+      expect(reward.message.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+// ── getDailyRecommendation ────────────────────────────────────────────────────
+
+describe('getDailyRecommendation', () => {
+  it('gacha event → mentions pack', () => {
+    const rec = getDailyRecommendation(DAILY_EVENTS[2])
+    expect(rec.toLowerCase()).toMatch(/pack/)
+  })
+
+  it('boost event → mentions boost', () => {
+    const rec = getDailyRecommendation(DAILY_EVENTS[3])
+    expect(rec.toLowerCase()).toMatch(/boost/)
+  })
+
+  it('energy event → mentions claim or gratis', () => {
+    const rec = getDailyRecommendation(DAILY_EVENTS[4])
+    expect(rec.toLowerCase()).toMatch(/claim|gratis|idle/)
+  })
+
+  it('monday/idle event → mentions farming or reclamar', () => {
+    const rec = getDailyRecommendation(DAILY_EVENTS[1])
+    expect(rec.toLowerCase()).toMatch(/farm|recl|30/)
+  })
+
+  it('coin/xp/power events → mentions tareas or farmear', () => {
+    const coinEvents = [DAILY_EVENTS[0], DAILY_EVENTS[5], DAILY_EVENTS[6]]
+    for (const ev of coinEvents) {
+      const rec = getDailyRecommendation(ev)
+      expect(rec.length).toBeGreaterThan(5)
+    }
+  })
+
+  it('returns a non-empty string for null input', () => {
+    const rec = getDailyRecommendation(null)
+    expect(typeof rec).toBe('string')
+    expect(rec.length).toBeGreaterThan(0)
+  })
+})
+
+// ── pickRarity (gacha.js) ─────────────────────────────────────────────────────
+
+describe('pickRarity', () => {
+  it('returns a rarity key present in the rates object', () => {
+    const rarity = pickRarity(BASE_RATES, 0.5)
+    expect(Object.keys(BASE_RATES)).toContain(rarity)
+  })
+
+  it('returns common for rand = 0 (lowest cumulative)', () => {
+    // common = 0.60, so rand < 0.60 picks common
+    expect(pickRarity(BASE_RATES, 0.0)).toBe('common')
+    expect(pickRarity(BASE_RATES, 0.59)).toBe('common')
+  })
+
+  it('returns legendary for rand just below 1.0', () => {
+    expect(pickRarity(BASE_RATES, 0.9999)).toBe('legendary')
+  })
+
+  it('distributes correctly over many trials (smoke test)', () => {
+    const counts = { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }
+    const N = 10_000
+    for (let i = 0; i < N; i++) {
+      counts[pickRarity(BASE_RATES)]++
+    }
+    // common should dominate
+    expect(counts.common).toBeGreaterThan(N * 0.5)
+    // legendary should be rare
+    expect(counts.legendary).toBeLessThan(N * 0.05)
+  })
+
+  it('after applying event rare bonus, rare rate increases', () => {
+    const boostedRates = applyGachaRareBonus(BASE_RATES, 0.05)
+    // rare threshold moves from ~0.85 to higher, so rand = 0.87 gives rare in boosted but epic in base
+    const normalised = normalizeRates(BASE_RATES)
+    const rareThreshold = normalised.common + normalised.uncommon + normalised.rare
+    const rareThresholdBoosted = boostedRates.common + boostedRates.uncommon + boostedRates.rare
+    expect(rareThresholdBoosted).toBeGreaterThan(rareThreshold)
   })
 })
