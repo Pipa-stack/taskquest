@@ -5,32 +5,20 @@ import CompletedSection from './CompletedSection.jsx'
 import XpBurst from './XpBurst.jsx'
 
 /**
- * Renders today's task list.
- *
- * Pending tasks use AnimatePresence for enter/exit animations.
- * Completing a task shows an XpBurst near the button before it moves to done.
- * Done tasks are shown in a collapsible CompletedSection.
- *
- * @param {{
- *   tasks: Array<{ id: number, title: string, status: string, isClone: boolean }>,
- *   onComplete: (id: number) => Promise<number>
- * }} props
+ * Renders today's task list with animated pending / done separation.
  */
 export default function TaskList({ tasks, onComplete }) {
   const [completing, setCompleting] = useState(() => new Set())
-  // { [taskId]: xp } – active XP bursts waiting to animate out
   const [bursts, setBursts] = useState({})
 
   async function handleComplete(id) {
     if (completing.has(id)) return
 
-    // Determine XP optimistically from current task data
     const task = tasks.find((t) => t.id === id)
     const expectedXp = task?.isClone ? 0 : XP_PER_TASK
 
     setCompleting((prev) => new Set(prev).add(id))
 
-    // Show burst immediately while task is still in pending list
     if (expectedXp > 0) {
       setBursts((prev) => ({ ...prev, [id]: expectedXp }))
     }
@@ -64,7 +52,7 @@ export default function TaskList({ tasks, onComplete }) {
   }
 
   const pending = tasks.filter((t) => t.status === 'pending')
-  const done = tasks.filter((t) => t.status === 'done')
+  const done    = tasks.filter((t) => t.status === 'done')
 
   return (
     <div className="task-list">
@@ -75,7 +63,8 @@ export default function TaskList({ tasks, onComplete }) {
             <AnimatePresence initial={false}>
               {pending.map((task) => {
                 const inFlight = completing.has(task.id)
-                const burstXp = bursts[task.id]
+                const burstXp  = bursts[task.id]
+
                 return (
                   <motion.li
                     key={task.id}
@@ -84,15 +73,12 @@ export default function TaskList({ tasks, onComplete }) {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 24, scale: 0.96 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
                   >
                     <span className="task-title">
                       {task.title}
                       {task.isClone && (
-                        <span
-                          className="clone-badge"
-                          title="Tarea duplicada — 0 XP (anti-farming)"
-                        >
+                        <span className="clone-badge" title="Tarea duplicada — 0 XP (anti-farming)">
                           clone · 0 XP
                         </span>
                       )}
@@ -109,11 +95,11 @@ export default function TaskList({ tasks, onComplete }) {
                         className="btn-complete"
                         onClick={() => handleComplete(task.id)}
                         disabled={inFlight}
-                        whileHover={{ scale: 1.07 }}
-                        whileTap={{ scale: 0.88 }}
+                        whileHover={{ scale: 1.06 }}
+                        whileTap={{ scale: 0.9 }}
                         aria-label={`Completar tarea: ${task.title}`}
                       >
-                        {inFlight ? 'Guardando…' : '✓ Done'}
+                        {inFlight ? '…' : '✓ Done'}
                       </motion.button>
                       {burstXp && (
                         <XpBurst xp={burstXp} onDone={() => clearBurst(task.id)} />

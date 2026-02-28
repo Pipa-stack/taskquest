@@ -2,14 +2,15 @@ import { motion } from 'framer-motion'
 import { XP_PER_LEVEL } from '../domain/gamification.js'
 import { getCharacter } from '../domain/characters.js'
 import { getActiveBoosts, applyBoostsToCaps, getBoost } from '../domain/boosts.js'
+import { computeTalentBonuses } from '../domain/talents.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { playerRepository } from '../repositories/playerRepository.js'
 
 /**
- * Displays player level, XP progress bar (animated), daily streak,
- * daily goal progress, combo badge, active team, and idle farming stats.
+ * Compact sidebar HUD — chips + bars layout.
+ * Shows level/XP, streak, coins, energy, CPM, zone, power, team, daily goal.
  */
 export default function PlayerStats({
   xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam,
@@ -21,8 +22,6 @@ export default function PlayerStats({
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
   const today = todayKey()
-
-  // Count today's completed tasks live
   const todayDone = useLiveQuery(
     () => db.tasks.where('[dueDate+status]').equals([today, 'done']).count(),
     [today]
@@ -34,44 +33,43 @@ export default function PlayerStats({
 
   const showCombo = combo > 1.0
 
-  // Idle farming derived values
   const nowMs = Date.now()
   const activeBoostList = getActiveBoosts(boosts ?? [], nowMs)
+  const talentBonuses = computeTalentBonuses({})
   const effectiveEnergyCap = applyBoostsToCaps(energyCap ?? 100, activeBoostList)
-  const energyPct = effectiveEnergyCap > 0 ? Math.round(((energy ?? 100) / effectiveEnergyCap) * 100) : 100
+  const energyPct = effectiveEnergyCap > 0
+    ? Math.round(((energy ?? 0) / effectiveEnergyCap) * 100)
+    : 0
 
-  // Find the active coin boost with the highest multiplier (for display)
   const activeCoinBoost = activeBoostList
     .filter((b) => b.coinMultiplier)
     .sort((a, b) => b.coinMultiplier - a.coinMultiplier)[0] ?? null
 
+  const cpmDisplay = activeCoinBoost
+    ? ((coinsPerMinuteBase ?? 1) * activeCoinBoost.coinMultiplier).toFixed(1)
+    : (coinsPerMinuteBase ?? 1)
+
   const handleGoalChange = async (e) => {
-    const newGoal = Number(e.target.value)
-    await playerRepository.setDailyGoal(newGoal)
+    await playerRepository.setDailyGoal(Number(e.target.value))
   }
 
   const handleTickIdle = async () => {
     const { coinsEarned } = await playerRepository.tickIdle(Date.now())
     if (onNotify) {
-      if (coinsEarned > 0) {
-        onNotify(`+${coinsEarned} monedas reclamadas`)
-      } else {
-        onNotify('Sin monedas que reclamar (sin energía o muy pronto)')
-      }
+      onNotify(coinsEarned > 0
+        ? `+${coinsEarned} monedas reclamadas`
+        : 'Sin monedas que reclamar'
+      )
     }
   }
 
   return (
     <div className="player-stats">
-      <h2 className="stats-title">
+      <p className="stats-title">
         HUD
-        {syncStatus === 'pending' && (
-          <span className="player-sync-icon" title="Sincronización pendiente"> ⏳</span>
-        )}
-        {syncStatus === 'error' && (
-          <span className="player-sync-icon" title="Error de sincronización"> ⚠️</span>
-        )}
-      </h2>
+        {syncStatus === 'pending' && <span className="player-sync-icon" title="Sync pendiente"> ⏳</span>}
+        {syncStatus === 'error'   && <span className="player-sync-icon" title="Error de sync"> ⚠️</span>}
+      </p>
 
       {/* Combo badge */}
       {showCombo && (
@@ -86,11 +84,12 @@ export default function PlayerStats({
         </motion.div>
       )}
 
-      <div className="stats-row">
-        <div className="stat">
-          <span className="stat-label">Nivel</span>
+      {/* Level + streak chips */}
+      <div className="hud-chips-row">
+        <div className="hud-chip">
+          <span className="hud-chip-label">Nivel</span>
           <motion.span
-            className="stat-value"
+            className="hud-chip-value"
             key={level}
             initial={{ scale: 1.4, color: '#a78bfa' }}
             animate={{ scale: 1, color: '#e2e2e7' }}
@@ -99,116 +98,111 @@ export default function PlayerStats({
             {level}
           </motion.span>
         </div>
-        <div className="stat">
-          <span className="stat-label">XP Total</span>
-          <span className="stat-value">{xp}</span>
+        <div className="hud-chip">
+          <span className="hud-chip-label">Racha</span>
+          <span className="hud-chip-value">{streak} 🔥</span>
         </div>
-        <div className="stat">
-          <span className="stat-label">Racha</span>
-          <span className="stat-value">{streak} 🔥</span>
+        <div className="hud-chip">
+          <span className="hud-chip-label">🪙 Monedas</span>
+          <span className="hud-chip-value hud-chip-value--gold">{coins ?? 0}</span>
         </div>
       </div>
 
-      <div
-        className="xp-bar-wrap"
-        title={`${xpIntoLevel} / ${XP_PER_LEVEL} XP para el siguiente nivel`}
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`XP: ${xpIntoLevel} de ${XP_PER_LEVEL}`}
-      >
-        <motion.div
-          className="xp-bar"
-          animate={{ width: `${pct}%` }}
-          transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-        />
-      </div>
-      <p className="xp-hint">{xpToNext} XP para nivel {level + 1}</p>
-
-      {/* Idle farming section */}
-      <div className="idle-section">
-        {/* Coins */}
-        <div className="idle-row">
-          <span className="idle-label">🪙 Monedas:</span>
-          <span className="idle-value">{coins ?? 0}</span>
+      {/* XP bar */}
+      <div>
+        <div
+          className="xp-bar-wrap"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`XP: ${xpIntoLevel} de ${XP_PER_LEVEL}`}
+          title={`${xpIntoLevel} / ${XP_PER_LEVEL} XP`}
+        >
+          <motion.div
+            className="xp-bar"
+            animate={{ width: `${pct}%` }}
+            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+            style={{ minWidth: pct > 0 ? 4 : 0 }}
+          />
         </div>
-        <div className="idle-row">
-          <span className="idle-label">Monedas/min:</span>
-          <span className="idle-value">
-            {coinsPerMinuteBase ?? 1}
+        <p className="xp-hint">{xpToNext} XP → lv {level + 1}</p>
+      </div>
+
+      {/* Energy bar */}
+      <div className="hud-energy-wrap">
+        <div className="hud-energy-header">
+          <span>⚡ Energía</span>
+          <span>{Math.floor(energy ?? 0)}/{effectiveEnergyCap}</span>
+        </div>
+        <div
+          className="energy-bar-wrap"
+          role="progressbar"
+          aria-valuenow={energyPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Energía: ${Math.floor(energy ?? 0)} de ${effectiveEnergyCap}`}
+        >
+          <motion.div
+            className="energy-bar"
+            animate={{ width: `${energyPct}%` }}
+            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+            style={{ minWidth: energyPct > 0 ? 2 : 0 }}
+          />
+        </div>
+      </div>
+
+      {/* CPM chip */}
+      <div className="hud-chips-row">
+        <div className="hud-chip" style={{ flex: 2 }}>
+          <span className="hud-chip-label">Monedas/min</span>
+          <span className="hud-chip-value hud-chip-value--cyan">
+            {cpmDisplay}
             {activeCoinBoost && (
               <span className="boost-active-badge"> ×{activeCoinBoost.coinMultiplier}</span>
             )}
           </span>
         </div>
-
-        {/* Energy bar */}
-        <div className="idle-energy">
-          <div className="idle-energy-header">
-            <span className="idle-label">⚡ Energía:</span>
-            <span className="idle-value">{Math.floor(energy ?? 100)}/{effectiveEnergyCap}</span>
-          </div>
-          <div
-            className="energy-bar-wrap"
-            role="progressbar"
-            aria-valuenow={energyPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Energía: ${Math.floor(energy ?? 100)} de ${effectiveEnergyCap}`}
-          >
-            <motion.div
-              className="energy-bar"
-              animate={{ width: `${energyPct}%` }}
-              transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            />
-          </div>
-        </div>
-
-        {/* Active boost display */}
-        {activeCoinBoost && (() => {
-          const boostDef = getBoost(activeCoinBoost.id)
-          const remainingMs = activeCoinBoost.expiresAt - nowMs
-          const remainingMin = Math.max(0, Math.ceil(remainingMs / 60_000))
-          return (
-            <div className="boost-active-info">
-              🚀 {boostDef?.label ?? activeCoinBoost.id} — {remainingMin}m restantes
-            </div>
-          )
-        })()}
-
-        {/* Claim idle button */}
-        <button
-          className="idle-claim-btn"
-          onClick={handleTickIdle}
-          type="button"
-          title="Reclamar monedas acumuladas desde el último tick"
-        >
-          Reclamar idle
-        </button>
       </div>
 
-      {/* Zone & Power info */}
+      {/* Active boost */}
+      {activeCoinBoost && (() => {
+        const boostDef = getBoost(activeCoinBoost.id)
+        const remainingMin = Math.max(0, Math.ceil((activeCoinBoost.expiresAt - nowMs) / 60_000))
+        return (
+          <div className="boost-active-info">
+            🚀 {boostDef?.label ?? activeCoinBoost.id} — {remainingMin}m
+          </div>
+        )
+      })()}
+
+      {/* Idle claim (compact) */}
+      <button
+        className="idle-claim-btn"
+        onClick={handleTickIdle}
+        type="button"
+        title="Reclamar monedas acumuladas"
+      >
+        Reclamar idle
+      </button>
+
+      {/* Zone & Power */}
       <div className="hud-zone-row">
-        <span className="hud-zone-label">
-          📍 Zona <strong>{currentZone ?? 1}</strong>
-        </span>
-        <span className="hud-power-label">
-          ⚡ <strong>{powerScore ?? 0}</strong> power
-        </span>
+        <span className="hud-zone-label">📍 Zona <strong>{currentZone ?? 1}</strong></span>
+        <span className="hud-power-label">⚡ <strong>{powerScore ?? 0}</strong></span>
         {onNavigateToMap && (
           <button
             className="hud-map-btn"
             onClick={onNavigateToMap}
             type="button"
-            title="Abrir mapa de zonas"
+            aria-label="Abrir mapa de zonas"
           >
             🗺️ Mapa
           </button>
         )}
       </div>
 
-      {/* Active Team */}
+      {/* Active team */}
       <div className="hud-team">
         <span className="hud-team-label">Equipo:</span>
         {activeTeam && activeTeam.length > 0 ? (
@@ -227,7 +221,7 @@ export default function PlayerStats({
         )}
       </div>
 
-      {/* Daily Goal */}
+      {/* Daily goal */}
       <div className="daily-goal">
         <div className="daily-goal-header">
           <span className="daily-goal-label">
@@ -257,6 +251,7 @@ export default function PlayerStats({
             className={`daily-goal-bar ${goalMet ? 'goal-bar-done' : ''}`}
             animate={{ width: `${goalPct}%` }}
             transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+            style={{ minWidth: goalPct > 0 ? 4 : 0 }}
           />
         </div>
       </div>

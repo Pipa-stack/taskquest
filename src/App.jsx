@@ -7,6 +7,7 @@ import { useAuth } from './hooks/useAuth.js'
 import TaskForm from './components/TaskForm.jsx'
 import TaskList from './components/TaskList.jsx'
 import PlayerStats from './components/PlayerStats.jsx'
+import BaseDashboard from './components/BaseDashboard.jsx'
 import LevelUpOverlay from './components/LevelUpOverlay.jsx'
 import Notifications from './components/Notifications.jsx'
 import RewardsShop from './components/RewardsShop.jsx'
@@ -30,7 +31,18 @@ import './App.css'
 
 let notifIdCounter = 0
 
-const TABS = ['Tasks', 'Rewards', 'Stats', 'Colección', 'Boosts', 'Mapa', 'Talentos']
+// Tab definitions with icons
+const TABS = [
+  { id: 'Base',      label: '🏠 Base' },
+  { id: 'Tasks',     label: '✓ Tasks' },
+  { id: 'Rewards',   label: '🎁 Rewards' },
+  { id: 'Stats',     label: '📊 Stats' },
+  { id: 'Colección', label: '👥 Colección' },
+  { id: 'Boosts',    label: '🚀 Boosts' },
+  { id: 'Mapa',      label: '🗺️ Mapa' },
+  { id: 'Talentos',  label: '🌟 Talentos' },
+]
+
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -38,12 +50,16 @@ const IDLE_TICK_INTERVAL_MS = 30_000
 function loadSelectedDate() {
   try {
     const stored = localStorage.getItem('selectedDateKey')
-    // Validate format before trusting it
     if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored
-  } catch (_) {
-    // localStorage unavailable (e.g. private browsing restrictions)
-  }
+  } catch (_) {}
   return todayKey()
+}
+
+const TAB_ANIM = {
+  initial:    { opacity: 0, y: 6 },
+  animate:    { opacity: 1, y: 0 },
+  exit:       { opacity: 0, y: -6 },
+  transition: { duration: 0.18 },
 }
 
 function App() {
@@ -56,59 +72,48 @@ function App() {
   const player = usePlayer()
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState('Tasks')
+  const [activeTab, setActiveTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
 
-  // Live count of pending outbox entries (drives the sync indicator)
   const pendingOutboxCount = useLiveQuery(
     () => db.outbox.where('status').equals('pending').count(),
     [],
     0
   )
 
-  // Pre-compute power score from active team (changes when team composition changes)
   const powerScore = useMemo(
     () => computePowerScore(player.activeTeam ?? [], {}, CHARACTERS),
     [player.activeTeam]
   )
 
-  // Keep a ref of current XP so handleComplete can read it synchronously
   const playerXpRef = useRef(player.xp)
-  useEffect(() => {
-    playerXpRef.current = player.xp
-  }, [player.xp])
+  useEffect(() => { playerXpRef.current = player.xp }, [player.xp])
 
-  // Sync loop: run immediately on login, then every SYNC_INTERVAL_MS
+  // Sync loop
   useEffect(() => {
     if (!user || !supabase) return
-
     const sync = () => {
       pushOutbox({ supabase, userId: user.id }).catch(console.warn)
       pullRemote({ supabase, userId: user.id }).catch(console.warn)
       pushPlayerOutbox({ supabase, userId: user.id }).catch(console.warn)
       pullPlayerRemote({ supabase, userId: user.id }).catch(console.warn)
     }
-
     sync()
     const intervalId = setInterval(sync, SYNC_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [user])
 
-  // Idle tick loop: every 30 s, process idle earnings (works offline too)
+  // Idle tick loop (background)
   useEffect(() => {
-    const tick = () => {
-      playerRepository.tickIdle(Date.now()).catch(console.warn)
-    }
+    const tick = () => { playerRepository.tickIdle(Date.now()).catch(console.warn) }
     const intervalId = setInterval(tick, IDLE_TICK_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [])
 
   const handleSelectDateKey = useCallback((dateKey) => {
     setSelectedDateKey(dateKey)
-    try {
-      localStorage.setItem('selectedDateKey', dateKey)
-    } catch (_) {}
+    try { localStorage.setItem('selectedDateKey', dateKey) } catch (_) {}
   }, [])
 
   const addNotification = useCallback((message) => {
@@ -120,34 +125,28 @@ function App() {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
   }, [])
 
-  const handleComplete = useCallback(
-    async (taskId) => {
-      const prevXp = playerXpRef.current
-      const prevLevel = xpToLevel(prevXp)
+  const handleComplete = useCallback(async (taskId) => {
+    const prevXp = playerXpRef.current
+    const prevLevel = xpToLevel(prevXp)
 
-      const { xpEarned, newAchievements } = await completeTask(taskId)
+    const { xpEarned, newAchievements } = await completeTask(taskId)
 
-      if (xpEarned > 0) {
-        const newLevel = xpToLevel(prevXp + xpEarned)
-        if (newLevel > prevLevel) {
-          setShowLevelUp(true)
-          addNotification(`LEVEL UP! Ahora eres nivel ${newLevel} 🎉`)
-        }
-        addNotification(`+${xpEarned} XP`)
+    if (xpEarned > 0) {
+      const newLevel = xpToLevel(prevXp + xpEarned)
+      if (newLevel > prevLevel) {
+        setShowLevelUp(true)
+        addNotification(`LEVEL UP! Ahora eres nivel ${newLevel} 🎉`)
       }
+      addNotification(`+${xpEarned} XP`)
+    }
 
-      // Achievement notifications
-      for (const id of newAchievements) {
-        const achievement = getAchievement(id)
-        if (achievement) {
-          addNotification(`🏆 Logro desbloqueado: ${achievement.title}`)
-        }
-      }
+    for (const id of newAchievements) {
+      const achievement = getAchievement(id)
+      if (achievement) addNotification(`🏆 Logro desbloqueado: ${achievement.title}`)
+    }
 
-      return xpEarned
-    },
-    [completeTask, addNotification]
-  )
+    return xpEarned
+  }, [completeTask, addNotification])
 
   const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
 
@@ -165,34 +164,38 @@ function App() {
         </div>
       </header>
 
-      {/* Tab navigation */}
-      <nav className="tabs-nav" role="tablist">
-        {TABS.map((tab) => (
+      {/* Pill bar navigation */}
+      <nav className="tabs-nav" role="tablist" aria-label="Navegación principal">
+        {TABS.map(({ id, label }) => (
           <button
-            key={tab}
+            key={id}
             role="tab"
-            aria-selected={activeTab === tab}
-            className={`tab-btn ${activeTab === tab ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            aria-selected={activeTab === id}
+            className={`tab-btn ${activeTab === id ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab(id)}
           >
-            {tab}
+            {label}
           </button>
         ))}
       </nav>
 
-      {/* Desktop: 2-column layout. Mobile: stacked */}
       <div className="app-layout">
         <main className="app-main">
           <AnimatePresence mode="wait">
+
+            {activeTab === 'Base' && (
+              <motion.div key="base" {...TAB_ANIM}>
+                <BaseDashboard
+                  player={player}
+                  powerScore={powerScore}
+                  onNotify={addNotification}
+                  onNavigateTo={setActiveTab}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'Tasks' && (
-              <motion.div
-                key="tasks"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
-                {/* Mobile toggle for calendar */}
+              <motion.div key="tasks" {...TAB_ANIM}>
                 <button
                   className="mc-toggle-btn"
                   onClick={() => setCalendarOpen((o) => !o)}
@@ -201,7 +204,6 @@ function App() {
                   📅 Calendario {calendarOpen ? '▲' : '▼'}
                 </button>
 
-                {/* Calendar wrapper: always visible on desktop, togglable on mobile */}
                 <div className={`mc-wrapper${calendarOpen ? ' mc-open' : ''}`}>
                   <MiniCalendar
                     selectedDateKey={selectedDateKey}
@@ -216,13 +218,7 @@ function App() {
             )}
 
             {activeTab === 'Rewards' && (
-              <motion.div
-                key="rewards"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="rewards" {...TAB_ANIM}>
                 <RewardsShop
                   xp={player.xp}
                   rewardsUnlocked={player.rewardsUnlocked}
@@ -232,25 +228,13 @@ function App() {
             )}
 
             {activeTab === 'Stats' && (
-              <motion.div
-                key="stats"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="stats" {...TAB_ANIM}>
                 <StatsTab streak={player.streak} />
               </motion.div>
             )}
 
             {activeTab === 'Colección' && (
-              <motion.div
-                key="collection"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="collection" {...TAB_ANIM}>
                 <CharacterCollection
                   xp={player.xp}
                   unlockedCharacters={player.unlockedCharacters}
@@ -261,13 +245,7 @@ function App() {
             )}
 
             {activeTab === 'Boosts' && (
-              <motion.div
-                key="boosts"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="boosts" {...TAB_ANIM}>
                 <BoostShop
                   coins={player.coins}
                   boosts={player.boosts}
@@ -277,13 +255,7 @@ function App() {
             )}
 
             {activeTab === 'Mapa' && (
-              <motion.div
-                key="mapa"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="mapa" {...TAB_ANIM}>
                 <ZonesMap
                   player={player}
                   powerScore={powerScore}
@@ -293,13 +265,7 @@ function App() {
             )}
 
             {activeTab === 'Talentos' && (
-              <motion.div
-                key="talentos"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18 }}
-              >
+              <motion.div key="talentos" {...TAB_ANIM}>
                 <TalentTree
                   essence={player.essence}
                   talents={player.talents}
@@ -307,6 +273,7 @@ function App() {
                 />
               </motion.div>
             )}
+
           </AnimatePresence>
         </main>
 
