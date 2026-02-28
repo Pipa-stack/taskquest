@@ -208,4 +208,29 @@ db.version(8).stores({
   })
 })
 
+/**
+ * Schema v9
+ * ---------
+ * players gains sync-meta fields for UX state tracking:
+ *   lastSyncAt          – ISO timestamp of last sync attempt (null = never)
+ *   lastSyncOkAt        – ISO timestamp of last successful sync (null = never)
+ *   lastSyncErrorAt     – ISO timestamp of last sync error (null = none)
+ *   lastSyncErrorMessage – short error message from last failure (null = none)
+ *
+ * outbox gains:
+ *   authRequired – boolean flag: item failed with 401/403, skip until re-login
+ */
+db.version(9).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type, authRequired',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (player.lastSyncAt === undefined) player.lastSyncAt = null
+    if (player.lastSyncOkAt === undefined) player.lastSyncOkAt = null
+    if (player.lastSyncErrorAt === undefined) player.lastSyncErrorAt = null
+    if (player.lastSyncErrorMessage === undefined) player.lastSyncErrorMessage = null
+  })
+})
+
 export default db

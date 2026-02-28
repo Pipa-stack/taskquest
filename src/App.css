@@ -184,6 +184,190 @@ body {
   margin-left: var(--s-1);
 }
 
+/* ── Sync HUD ─────────────────────────────────────────────────────── */
+.sync-hud {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.sync-state-idle    { color: var(--c-green);  animation: none; opacity: 0.8; }
+.sync-state-syncing { color: var(--c-blue);   animation: pulse 2s ease-in-out infinite; }
+.sync-state-error   { color: var(--c-yellow); animation: none; opacity: 0.9; }
+.sync-state-offline { color: var(--c-muted);  animation: none; opacity: 0.7; }
+
+.sync-last-time {
+  font-size: 0.65rem;
+  color: var(--c-muted);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.sync-retry-btn {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-yellow);
+  background: transparent;
+  color: var(--c-yellow);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.sync-retry-btn:hover {
+  background: var(--c-yellow);
+  color: #000;
+}
+
+.dev-panel-toggle {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border-2);
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+.dev-panel-toggle:hover { background: var(--c-surface-2); }
+
+/* ── Corruption banner ────────────────────────────────────────────── */
+.corruption-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  background: rgba(251, 191, 36, 0.12);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.3);
+  font-size: 0.82rem;
+  color: var(--c-yellow);
+  flex-wrap: wrap;
+}
+
+.corruption-repair-btn {
+  padding: 2px 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-yellow);
+  background: transparent;
+  color: var(--c-yellow);
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: background 0.15s, color 0.15s;
+}
+.corruption-repair-btn:hover {
+  background: var(--c-yellow);
+  color: #000;
+}
+
+.corruption-dismiss-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 var(--s-2);
+}
+.corruption-dismiss-btn:hover { color: var(--c-text); }
+
+/* ── Dev Panel overlay ────────────────────────────────────────────── */
+.dev-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: var(--s-4);
+}
+
+.dev-panel-box {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--r-lg);
+  padding: var(--s-6);
+  width: 360px;
+  max-width: 95vw;
+  box-shadow: var(--shadow-md);
+}
+
+.dev-panel-box h3 {
+  margin: 0 0 var(--s-4);
+  font-size: 1rem;
+  color: var(--c-purple);
+}
+
+.dev-panel-section {
+  margin-bottom: var(--s-4);
+}
+
+.dev-panel-section h4 {
+  margin: 0 0 var(--s-2);
+  font-size: 0.78rem;
+  color: var(--c-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dev-panel-btn {
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border-2);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+  width: 100%;
+  text-align: left;
+}
+.dev-panel-btn:hover { background: var(--c-surface-3); }
+.dev-panel-btn.danger { border-color: var(--c-red); color: var(--c-red); }
+.dev-panel-btn.danger:hover { background: rgba(248,113,113,0.12); }
+
+.dev-panel-preview {
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  background: var(--c-surface-2);
+  border-radius: var(--r-md);
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.dev-panel-actions {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.dev-panel-confirm-btn {
+  flex: 1;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-red);
+  background: rgba(248,113,113,0.15);
+  color: var(--c-red);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.dev-panel-confirm-btn:hover { background: rgba(248,113,113,0.3); }
+
+.dev-panel-cancel-btn {
+  flex: 1;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border-2);
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.dev-panel-cancel-btn:hover { background: var(--c-surface-2); }
+
 .app-title {
   font-size: 2.2rem;
   font-weight: 800;
