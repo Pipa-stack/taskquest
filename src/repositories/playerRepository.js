@@ -4,6 +4,8 @@ import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
 import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
+import { getActiveEvents, applyEventModifiers, canClaimEventBonus, EVENT_CLAIM_BONUS } from '../domain/events.js'
+import { todayKey } from '../domain/dateKey.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -34,6 +36,8 @@ export function playerToPayload(player) {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
+    // Events system (PR26) — safe default, no schema migration needed
+    lastEventClaimDate: player.lastEventClaimDate ?? null,
   }
 }
 
@@ -337,12 +341,14 @@ export const playerRepository = {
 
       // Apply talent bonuses on top of base caps and multipliers
       const talentBonuses = computeTalentBonuses(player.talents ?? {})
+      // Event modifiers (deterministic, pure — no async needed)
+      const eventMods = applyEventModifiers({}, getActiveEvents(todayKey()))
       const effectiveEnergyCap = applyBoostsToCaps(
-        (player.energyCap ?? 100) + talentBonuses.energyCapBonus,
+        (player.energyCap ?? 100) + talentBonuses.energyCapBonus + eventMods.energyCapBonus,
         activeBoosts,
       )
       const effectiveMultiplier =
-        teamMultiplier * talentBonuses.idleCoinMult * (player.globalMultiplierCache ?? 1)
+        teamMultiplier * talentBonuses.idleCoinMult * (player.globalMultiplierCache ?? 1) * eventMods.idleCpmMultiplier
 
       const earnings = computeIdleEarnings({
         now: nowMs,
@@ -412,7 +418,10 @@ export const playerRepository = {
       }
 
       const currentCoins = player.coins ?? 0
-      if (currentCoins < boostDef.cost) return
+      // Apply event boost-price discount (deterministic)
+      const eventMods = applyEventModifiers({}, getActiveEvents(todayKey()))
+      const effectiveCost = Math.max(1, Math.ceil(boostDef.cost * eventMods.boostPriceMultiplier))
+      if (currentCoins < effectiveCost) return
 
       let newBoosts = [...(player.boosts ?? [])]
       let newEnergy = player.energy ?? 100
@@ -438,7 +447,7 @@ export const playerRepository = {
       const updated = {
         ...player,
         id: 1,
-        coins: Math.max(0, currentCoins - boostDef.cost),
+        coins: Math.max(0, currentCoins - effectiveCost),
         energy: newEnergy,
         boosts: newBoosts,
         updatedAt: nowISO,
@@ -604,6 +613,57 @@ export const playerRepository = {
     })
 
     return success
+  },
+
+  /**
+   * Claims the once-per-day event bonus if the player qualifies.
+   *
+   * Requirements:
+   *  - player.lastEventClaimDate !== dateKey  (anti-duplication)
+   *  - todayTasksCount >= 1  (must have completed at least one task today)
+   *
+   * On success: adds EVENT_CLAIM_BONUS coins (scaled by event taskCoinMultiplier),
+   * sets lastEventClaimDate = dateKey, and enqueues UPSERT_PLAYER.
+   *
+   * @param {string} dateKey        – today's YYYY-MM-DD key
+   * @param {number} todayTasksCount – number of tasks completed today
+   * @returns {Promise<number|false>} bonus coins awarded, or false if not eligible
+   */
+  async claimEventBonus(dateKey, todayTasksCount) {
+    if (todayTasksCount < 1) return false
+
+    const now = new Date().toISOString()
+    let bonusAwarded = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? { id: 1, xp: 0, coins: 0 }
+
+      if (!canClaimEventBonus(player, dateKey)) return
+
+      const activeEvents = getActiveEvents(dateKey)
+      const eventMods = applyEventModifiers({}, activeEvents)
+      const bonus = Math.max(1, Math.floor(EVENT_CLAIM_BONUS * eventMods.taskCoinMultiplier))
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) + bonus),
+        lastEventClaimDate: dateKey,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      bonusAwarded = bonus
+    })
+
+    return bonusAwarded
   },
 
   async claimZoneQuest(zoneId, questId) {

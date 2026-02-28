@@ -7,6 +7,7 @@ import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { playerRepository } from '../repositories/playerRepository.js'
+import { getActiveEvents } from '../domain/events.js'
 
 /**
  * Compact sidebar HUD — chips + bars layout.
@@ -22,6 +23,7 @@ export default function PlayerStats({
   const pct = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
 
   const today = todayKey()
+  const { daily: dailyEvent, weekly: weeklyEvent } = getActiveEvents(today)
   const todayDone = useLiveQuery(
     () => db.tasks.where('[dueDate+status]').equals([today, 'done']).count(),
     [today]
@@ -175,6 +177,26 @@ export default function PlayerStats({
           </div>
         )
       })()}
+
+      {/* Active event chip */}
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.3rem',
+          fontSize: '0.72rem',
+          fontWeight: 600,
+          color: dailyEvent.tagColor,
+          background: 'rgba(255,255,255,0.06)',
+          borderRadius: '999px',
+          padding: '0.2rem 0.55rem',
+          marginBottom: '0.25rem',
+          cursor: 'default',
+        }}
+        title={`Hoy: ${dailyEvent.title} | Semana: ${weeklyEvent.title}`}
+      >
+        🎉 {dailyEvent.icon} Evento activo
+      </div>
 
       {/* Idle claim (compact) */}
       <button

@@ -8,6 +8,7 @@ import { calcTeamMultiplier } from '../domain/idle.js'
 import { CHARACTERS } from '../domain/characters.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
+import { getActiveEvents, canClaimEventBonus, getEventEffectLines } from '../domain/events.js'
 
 const QUICK_ACTIONS = [
   { label: 'Boosts',    icon: '🚀', tab: 'Boosts' },
@@ -22,6 +23,7 @@ const QUICK_ACTIONS = [
  */
 export default function BaseDashboard({ player, powerScore, onNotify, onNavigateTo }) {
   const [claimState, setClaimState] = useState(null) // null | 'claimed' | 'empty'
+  const [eventClaimState, setEventClaimState] = useState(null) // null | 'claimed'
 
   const today = todayKey()
   const todayDone = useLiveQuery(
@@ -54,6 +56,21 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
   const talentMult = talentBonuses.idleCoinMult ?? 1
   const cpmBase = player.coinsPerMinuteBase ?? 1
   const cpmTotal = cpmBase * teamMult * boostMult * talentMult
+
+  // Active events (deterministic, no RNG)
+  const activeEvents = getActiveEvents(today)
+  const { daily: dailyEvent, weekly: weeklyEvent } = activeEvents
+  const eventClaimAvailable = !eventClaimState && canClaimEventBonus(player, today) && todayDone >= 1
+
+  const handleEventClaim = async () => {
+    if (!eventClaimAvailable) return
+    const bonus = await playerRepository.claimEventBonus(today, todayDone)
+    if (bonus) {
+      setEventClaimState('claimed')
+      onNotify?.(`🎉 +${bonus} monedas por evento diario`)
+      setTimeout(() => setEventClaimState(null), 3000)
+    }
+  }
 
   // Daily goal
   const dailyGoal = player.dailyGoal ?? 3
@@ -98,6 +115,98 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
 
   return (
     <div className="base-dashboard">
+
+      {/* ── Events Banner ────────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom: '0.75rem' }}>
+        <p style={{ margin: '0 0 0.5rem', fontWeight: 700, fontSize: '0.85rem', color: 'var(--c-accent, #a78bfa)' }}>
+          ✨ Eventos Activos
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Daily event card */}
+          <div style={{
+            flex: '1 1 140px',
+            border: `2px solid ${dailyEvent.tagColor}`,
+            borderRadius: '10px',
+            padding: '0.6rem 0.75rem',
+            background: 'rgba(255,255,255,0.04)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>{dailyEvent.icon}</span>
+              <div>
+                <span style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  color: dailyEvent.tagColor,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>HOY</span>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.2 }}>{dailyEvent.title}</p>
+              </div>
+            </div>
+            <ul style={{ margin: '0.25rem 0 0', padding: '0 0 0 1rem', fontSize: '0.72rem', color: 'var(--c-dim, #aaa)', lineHeight: 1.5 }}>
+              {getEventEffectLines(dailyEvent).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Weekly event card */}
+          <div style={{
+            flex: '1 1 140px',
+            border: `2px solid ${weeklyEvent.tagColor}`,
+            borderRadius: '10px',
+            padding: '0.6rem 0.75rem',
+            background: 'rgba(255,255,255,0.04)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>{weeklyEvent.icon}</span>
+              <div>
+                <span style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  color: weeklyEvent.tagColor,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>SEMANA</span>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.2 }}>{weeklyEvent.title}</p>
+              </div>
+            </div>
+            <ul style={{ margin: '0.25rem 0 0', padding: '0 0 0 1rem', fontSize: '0.72rem', color: 'var(--c-dim, #aaa)', lineHeight: 1.5 }}>
+              {getEventEffectLines(weeklyEvent).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Daily event claim button */}
+        {eventClaimState === 'claimed' ? (
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--c-green, #4ade80)', fontWeight: 600 }}>
+            ✓ ¡Bonus reclamado!
+          </p>
+        ) : canClaimEventBonus(player, today) ? (
+          <button
+            onClick={handleEventClaim}
+            disabled={todayDone < 1}
+            type="button"
+            style={{
+              marginTop: '0.5rem',
+              width: '100%',
+              padding: '0.45rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: todayDone >= 1 ? 'var(--c-accent, #7c3aed)' : 'var(--c-surface, #2a2a3a)',
+              color: todayDone >= 1 ? '#fff' : 'var(--c-dim, #888)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              cursor: todayDone >= 1 ? 'pointer' : 'not-allowed',
+            }}
+            title={todayDone < 1 ? 'Completa al menos 1 tarea para reclamar' : 'Reclamar bonus de evento (1 vez al día)'}
+          >
+            🎁 Reclamar bonus diario {todayDone < 1 ? '(necesitas 1 tarea)' : '(+20 monedas)'}
+          </button>
+        ) : null}
+      </div>
 
       {/* ── Hero card ────────────────────────────────────────────── */}
       <div className="base-hero-card card">

@@ -66,6 +66,8 @@ describe('playerToPayload', () => {
       essence: 0,
       talents: { idle: 0, gacha: 0, power: 0 },
       essenceSpent: 0,
+      // events system field (default)
+      lastEventClaimDate: null,
     })
     expect(payload).not.toHaveProperty('combo')
     expect(payload).not.toHaveProperty('lastCompleteAt')

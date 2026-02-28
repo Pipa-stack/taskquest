@@ -9,6 +9,7 @@ import { checkNewAchievements } from '../domain/achievements.js'
 import { taskRepository } from '../repositories/taskRepository.js'
 import { playerRepository } from '../repositories/playerRepository.js'
 import { getDeviceId } from '../lib/deviceId.js'
+import { getActiveEvents, applyEventModifiers, BASE_TASK_COIN_REWARD } from '../domain/events.js'
 
 /**
  * React hook that exposes tasks for a given date and mutation helpers.
@@ -75,6 +76,12 @@ export function useTasks(selectedDate) {
     let xpEarned = 0
     let newAchievements = []
 
+    // Event modifiers for today (deterministic, pure)
+    const eventMods = applyEventModifiers({}, getActiveEvents(today))
+    const coinReward = task.isClone
+      ? 0
+      : Math.max(0, Math.floor(BASE_TASK_COIN_REWARD * eventMods.taskCoinMultiplier))
+
     await db.transaction('rw', [db.tasks, db.players, db.outbox], async () => {
       await db.tasks.update(taskId, {
         status: 'done',
@@ -136,6 +143,7 @@ export function useTasks(selectedDate) {
         ...player,
         id: 1,
         xp: player.xp + xpEarned,
+        coins: Math.max(0, (player.coins ?? 0) + coinReward),
         combo: newCombo,
         lastCompleteAt: nowISO,
         achievementsUnlocked: [...currentUnlocked, ...newAchievements],
