@@ -1868,3 +1868,67 @@ ul { list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
    DAILY GOAL (legacy compat — still used inside PlayerStats)
    ══════════════════════════════════════════════════════════════════ */
 .daily-goal { margin-top: var(--s-3); }
+
+/* ══════════════════════════════════════════════════════════════════
+   TEAM SLOT — rarity indicator dot (CharacterCollection)
+   ══════════════════════════════════════════════════════════════════ */
+.team-slot-rarity {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rarity-color, var(--c-border-2));
+}
+.team-slot-rarity[data-rarity="common"]    { background: var(--rarity-common); }
+.team-slot-rarity[data-rarity="uncommon"]  { background: var(--rarity-uncommon); }
+.team-slot-rarity[data-rarity="rare"]      { background: var(--rarity-rare); }
+.team-slot-rarity[data-rarity="epic"]      { background: var(--rarity-epic); }
+.team-slot-rarity[data-rarity="legendary"] { background: var(--rarity-legendary); }
+
+/* ══════════════════════════════════════════════════════════════════
+   PRESTIGE TAB page wrapper
+   ══════════════════════════════════════════════════════════════════ */
+.prestige-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-6);
+  padding: var(--s-8) var(--s-4);
+  text-align: center;
+}
+
+.prestige-page-title {
+  font-size: 2rem;
+  font-weight: 900;
+  background: var(--grad-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.prestige-page-sub {
+  font-size: 0.9rem;
+  color: var(--c-muted);
+  max-width: 400px;
+  line-height: 1.65;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PREFERS-REDUCED-MOTION — disable CSS animations & transitions
+   ══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Keep specific shimmer/pulse animations off */
+  @keyframes shimmer-pulse { 0%, 100% { box-shadow: var(--glow-gold); } }
+  @keyframes pulse         { 0%, 100% { opacity: 0.8; } }
+}

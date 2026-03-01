@@ -17,6 +17,8 @@ import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
+import GachaShop from './components/GachaShop.jsx'
+import PrestigePanel from './components/PrestigePanel.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -33,14 +35,16 @@ let notifIdCounter = 0
 
 // Tab definitions with icons
 const TABS = [
-  { id: 'Base',      label: '🏠 Base' },
-  { id: 'Tasks',     label: '✓ Tasks' },
-  { id: 'Rewards',   label: '🎁 Rewards' },
-  { id: 'Stats',     label: '📊 Stats' },
+  { id: 'Base',      label: '🏠 Base'      },
+  { id: 'Tasks',     label: '✓ Tasks'      },
+  { id: 'Rewards',   label: '🎁 Rewards'   },
+  { id: 'Stats',     label: '📊 Stats'     },
   { id: 'Colección', label: '👥 Colección' },
-  { id: 'Boosts',    label: '🚀 Boosts' },
-  { id: 'Mapa',      label: '🗺️ Mapa' },
-  { id: 'Talentos',  label: '🌟 Talentos' },
+  { id: 'Boosts',    label: '🚀 Boosts'    },
+  { id: 'Gacha',     label: '🎲 Gacha'     },
+  { id: 'Mapa',      label: '🗺️ Mapa'      },
+  { id: 'Talentos',  label: '🌟 Talentos'  },
+  { id: 'Prestige',  label: '⭐ Prestige'  },
 ]
 
 const SYNC_INTERVAL_MS = 15_000
@@ -75,6 +79,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [showPrestige, setShowPrestige] = useState(false)
 
   const pendingOutboxCount = useLiveQuery(
     () => db.outbox.where('status').equals('pending').count(),
@@ -264,11 +269,64 @@ function App() {
               </motion.div>
             )}
 
+            {activeTab === 'Gacha' && (
+              <motion.div key="gacha" {...TAB_ANIM}>
+                <GachaShop
+                  coins={player.coins}
+                  talents={player.talents}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'Talentos' && (
               <motion.div key="talentos" {...TAB_ANIM}>
                 <TalentTree
                   essence={player.essence}
                   talents={player.talents}
+                  onNotify={addNotification}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'Prestige' && (
+              <motion.div key="prestige" {...TAB_ANIM}>
+                <div className="prestige-page">
+                  <div>
+                    <div className="prestige-page-title">⭐ Prestige</div>
+                    <p className="prestige-page-sub">
+                      Reinicia tu progreso a cambio de bonificaciones permanentes
+                      que hacen cada partida futura más poderosa.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowPrestige(true)}
+                    style={{
+                      padding: '0.85rem 2rem',
+                      background: player.level >= 20
+                        ? 'linear-gradient(135deg, #a78bfa, #60a5fa)'
+                        : '#1e1e2e',
+                      border: 'none',
+                      borderRadius: '12px',
+                      color: player.level >= 20 ? '#fff' : '#5a5a7a',
+                      fontSize: '1rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      letterSpacing: '0.03em',
+                      boxShadow: player.level >= 20
+                        ? '0 4px 16px rgba(167,139,250,0.4)'
+                        : 'none',
+                    }}
+                  >
+                    {player.level >= 20 ? 'Iniciar Prestige' : `Nivel actual: ${player.level} / 20 requerido`}
+                  </button>
+                </div>
+
+                <PrestigePanel
+                  open={showPrestige}
+                  onClose={() => setShowPrestige(false)}
+                  level={player.level}
                   onNotify={addNotification}
                 />
               </motion.div>
