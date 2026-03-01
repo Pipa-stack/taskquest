@@ -208,4 +208,24 @@ db.version(8).stores({
   })
 })
 
+/**
+ * Schema v9
+ * ---------
+ * players gains cosmetic skins fields:
+ *   unlockedSkins          – string[] of unlocked skin ids (default [])
+ *   equippedSkinByCharId   – { [characterId]: skinId } (default {})
+ *
+ * No Supabase migration needed: skins are local-only cosmetics.
+ */
+db.version(9).stores({
+  tasks: '++id, dueDate, status, createdAt, [dueDate+status], deviceId, localId, [deviceId+localId], syncStatus',
+  players: '++id',
+  outbox: '++id, createdAt, status, type',
+}).upgrade((tx) => {
+  return tx.players.toCollection().modify((player) => {
+    if (!player.unlockedSkins) player.unlockedSkins = []
+    if (!player.equippedSkinByCharId) player.equippedSkinByCharId = {}
+  })
+})
+
 export default db

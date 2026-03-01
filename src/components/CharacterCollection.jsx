@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { CHARACTERS } from '../domain/characters.js'
 import { playerRepository } from '../repositories/playerRepository.js'
+import Pokedex from './Pokedex.jsx'
 
 const MAX_TEAM = 3
 
@@ -13,8 +15,11 @@ const RARITY_LABEL = {
 
 /**
  * Character collection with rarity-striped cards and team slot UI.
+ * Includes a toggle to switch to Pokédex view.
  */
-export default function CharacterCollection({ xp, unlockedCharacters, activeTeam, onNotify }) {
+export default function CharacterCollection({ xp, unlockedCharacters, activeTeam, onNotify, player }) {
+  const [viewMode, setViewMode] = useState('collection') // 'collection' | 'pokedex'
+
   const unlockedSet = new Set(unlockedCharacters)
   const teamSet     = new Set(activeTeam)
 
@@ -42,94 +47,122 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
   return (
     <div className="char-collection">
 
-      {/* ── Active team slots ──────────────────────────────────── */}
-      <section className="team-section">
-        <h3 className="team-title">Tu equipo ({activeTeam.length}/{MAX_TEAM})</h3>
-        <div className="team-slots">
-          {Array.from({ length: MAX_TEAM }, (_, i) => {
-            const charId = activeTeam[i]
-            const char   = charId ? CHARACTERS.find((c) => c.id === charId) : null
-            return (
-              <div
-                key={i}
-                className={`team-slot ${char ? 'team-slot--filled' : 'team-slot--empty'}`}
-                title={char ? char.name : 'Slot vacío'}
-              >
-                {char ? (
-                  <>
-                    <span className="team-slot-emoji">{char.emoji}</span>
-                    <span className="team-slot-stage">S{char.stage}</span>
-                  </>
-                ) : (
-                  <span className="team-slot-plus">+</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </section>
+      {/* ── View toggle ─────────────────────────────────────────── */}
+      <div className="char-view-toggle">
+        <button
+          className={`char-toggle-btn ${viewMode === 'collection' ? 'char-toggle-btn--active' : ''}`}
+          onClick={() => setViewMode('collection')}
+          aria-pressed={viewMode === 'collection'}
+        >
+          👥 Colección
+        </button>
+        <button
+          className={`char-toggle-btn ${viewMode === 'pokedex' ? 'char-toggle-btn--active' : ''}`}
+          onClick={() => setViewMode('pokedex')}
+          aria-pressed={viewMode === 'pokedex'}
+        >
+          📖 Vista Pokédex
+        </button>
+      </div>
 
-      {/* ── Character cards ────────────────────────────────────── */}
-      <section className="chars-grid-section">
-        <h3 className="chars-grid-title">Personajes</h3>
-        <div className="chars-grid">
-          {CHARACTERS.map((char) => {
-            const isUnlocked = unlockedSet.has(char.id)
-            const inTeam     = teamSet.has(char.id)
-
-            return (
-              <div
-                key={char.id}
-                className={`char-card ${isUnlocked ? 'char-card--unlocked' : 'char-card--locked'}`}
-                data-rarity={char.rarity}
-              >
-                {/* Rarity badge */}
-                <span className="char-rarity-badge">
-                  {RARITY_LABEL[char.rarity] ?? char.rarity}
-                </span>
-
-                <div className="char-card-emoji">{char.emoji}</div>
-                <div className="char-card-name">{char.name}</div>
-
-                {inTeam && (
-                  <span className="char-in-team-badge">En equipo</span>
-                )}
-
-                {isUnlocked ? (
-                  inTeam ? (
-                    <button
-                      className="char-btn char-btn--remove"
-                      onClick={() => handleRemove(char)}
-                      aria-label={`Quitar a ${char.name} del equipo`}
-                    >
-                      Quitar
-                    </button>
-                  ) : (
-                    <button
-                      className="char-btn char-btn--add"
-                      onClick={() => handleAdd(char)}
-                      disabled={activeTeam.length >= MAX_TEAM}
-                      aria-label={`Añadir a ${char.name} al equipo`}
-                    >
-                      + Equipo
-                    </button>
-                  )
-                ) : (
-                  <button
-                    className="char-btn char-btn--buy"
-                    onClick={() => handleBuy(char)}
-                    disabled={xp < char.cost}
-                    title={`Coste: ${char.cost} XP`}
-                    aria-label={`Desbloquear a ${char.name} por ${char.cost} XP`}
+      {viewMode === 'pokedex' ? (
+        <Pokedex
+          player={player ?? { coins: 0, unlockedSkins: [], equippedSkinByCharId: {} }}
+          unlockedCharacters={unlockedCharacters}
+          onNotify={onNotify}
+        />
+      ) : (
+        <>
+          {/* ── Active team slots ──────────────────────────────────── */}
+          <section className="team-section">
+            <h3 className="team-title">Tu equipo ({activeTeam.length}/{MAX_TEAM})</h3>
+            <div className="team-slots">
+              {Array.from({ length: MAX_TEAM }, (_, i) => {
+                const charId = activeTeam[i]
+                const char   = charId ? CHARACTERS.find((c) => c.id === charId) : null
+                return (
+                  <div
+                    key={i}
+                    className={`team-slot ${char ? 'team-slot--filled' : 'team-slot--empty'}`}
+                    title={char ? char.name : 'Slot vacío'}
                   >
-                    {char.cost} XP
-                  </button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </section>
+                    {char ? (
+                      <>
+                        <span className="team-slot-emoji">{char.emoji}</span>
+                        <span className="team-slot-stage">S{char.stage}</span>
+                      </>
+                    ) : (
+                      <span className="team-slot-plus">+</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* ── Character cards ────────────────────────────────────── */}
+          <section className="chars-grid-section">
+            <h3 className="chars-grid-title">Personajes</h3>
+            <div className="chars-grid">
+              {CHARACTERS.map((char) => {
+                const isUnlocked = unlockedSet.has(char.id)
+                const inTeam     = teamSet.has(char.id)
+
+                return (
+                  <div
+                    key={char.id}
+                    className={`char-card ${isUnlocked ? 'char-card--unlocked' : 'char-card--locked'}`}
+                    data-rarity={char.rarity}
+                  >
+                    {/* Rarity badge */}
+                    <span className="char-rarity-badge">
+                      {RARITY_LABEL[char.rarity] ?? char.rarity}
+                    </span>
+
+                    <div className="char-card-emoji">{char.emoji}</div>
+                    <div className="char-card-name">{char.name}</div>
+
+                    {inTeam && (
+                      <span className="char-in-team-badge">En equipo</span>
+                    )}
+
+                    {isUnlocked ? (
+                      inTeam ? (
+                        <button
+                          className="char-btn char-btn--remove"
+                          onClick={() => handleRemove(char)}
+                          aria-label={`Quitar a ${char.name} del equipo`}
+                        >
+                          Quitar
+                        </button>
+                      ) : (
+                        <button
+                          className="char-btn char-btn--add"
+                          onClick={() => handleAdd(char)}
+                          disabled={activeTeam.length >= MAX_TEAM}
+                          aria-label={`Añadir a ${char.name} al equipo`}
+                        >
+                          + Equipo
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        className="char-btn char-btn--buy"
+                        onClick={() => handleBuy(char)}
+                        disabled={xp < char.cost}
+                        title={`Coste: ${char.cost} XP`}
+                        aria-label={`Desbloquear a ${char.name} por ${char.cost} XP`}
+                      >
+                        {char.cost} XP
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   )
 }

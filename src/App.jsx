@@ -240,6 +240,7 @@ function App() {
                   unlockedCharacters={player.unlockedCharacters}
                   activeTeam={player.activeTeam}
                   onNotify={addNotification}
+                  player={player}
                 />
               </motion.div>
             )}

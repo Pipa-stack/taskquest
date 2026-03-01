@@ -4,6 +4,7 @@ import { computeIdleEarnings } from '../domain/idle.js'
 import { canUnlockZone, applyZoneUnlock, getZone } from '../domain/zones.js'
 import { getQuest } from '../domain/zoneQuests.js'
 import { canSpendEssence, applySpendEssence, computeTalentBonuses } from '../domain/talents.js'
+import { getSkin } from '../domain/skins.js'
 
 /**
  * Builds the minimal player snapshot to store in the outbox payload.
@@ -34,6 +35,9 @@ export function playerToPayload(player) {
     essence:      player.essence      ?? 0,
     talents:      player.talents      ?? { idle: 0, gacha: 0, power: 0 },
     essenceSpent: player.essenceSpent ?? 0,
+    // Cosmetic skins fields (PR-pokedex)
+    unlockedSkins:        player.unlockedSkins        ?? [],
+    equippedSkinByCharId: player.equippedSkinByCharId ?? {},
   }
 }
 
@@ -589,6 +593,113 @@ export const playerRepository = {
       const updated = {
         ...applied,
         id: 1,
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Purchases a cosmetic skin with coins.
+   *
+   * Rules:
+   *   - Unknown skin id → returns false
+   *   - Already owned   → returns false (no double-buy)
+   *   - Insufficient coins → returns false
+   *
+   * On success: deducts coins, adds skinId to unlockedSkins, enqueues UPSERT_PLAYER.
+   *
+   * @param {string} skinId
+   * @returns {Promise<boolean>} true on success
+   */
+  async buySkin(skinId) {
+    const skinDef = getSkin(skinId)
+    if (!skinDef) return false
+
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        coins: 0,
+        unlockedSkins: [],
+        equippedSkinByCharId: {},
+      }
+
+      const alreadyOwned = (player.unlockedSkins ?? []).includes(skinId)
+      if (alreadyOwned) return
+      if ((player.coins ?? 0) < skinDef.priceCoins) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        coins: Math.max(0, (player.coins ?? 0) - skinDef.priceCoins),
+        unlockedSkins: [...(player.unlockedSkins ?? []), skinId],
+        updatedAt: now,
+        syncStatus: 'pending',
+      }
+      await db.players.put(updated)
+      await db.outbox.add({
+        createdAt: now,
+        status: 'pending',
+        type: 'UPSERT_PLAYER',
+        payload: playerToPayload(updated),
+        retryCount: 0,
+      })
+      success = true
+    })
+
+    return success
+  },
+
+  /**
+   * Equips a skin to a character (one skin per character at a time).
+   *
+   * Rules:
+   *   - Skin must be in unlockedSkins → otherwise returns false
+   *   - Replaces any previously equipped skin for that character
+   *
+   * @param {string} characterId
+   * @param {string} skinId
+   * @returns {Promise<boolean>} true on success
+   */
+  async equipSkin(characterId, skinId) {
+    if (!characterId || !skinId) return false
+
+    const now = new Date().toISOString()
+    let success = false
+
+    await db.transaction('rw', [db.players, db.outbox], async () => {
+      const player = (await db.players.get(1)) ?? {
+        id: 1,
+        xp: 0,
+        unlockedSkins: [],
+        equippedSkinByCharId: {},
+      }
+
+      const isOwned = (player.unlockedSkins ?? []).includes(skinId)
+      if (!isOwned) return
+
+      const updated = {
+        ...player,
+        id: 1,
+        equippedSkinByCharId: {
+          ...(player.equippedSkinByCharId ?? {}),
+          [characterId]: skinId,
+        },
         updatedAt: now,
         syncStatus: 'pending',
       }
