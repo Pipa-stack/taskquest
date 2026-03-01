@@ -7,6 +7,9 @@ import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { playerRepository } from '../repositories/playerRepository.js'
+import Progress from '../ui/Progress.jsx'
+import Badge from '../ui/Badge.jsx'
+import Button from '../ui/Button.jsx'
 
 /**
  * Compact sidebar HUD — chips + bars layout.
@@ -110,22 +113,13 @@ export default function PlayerStats({
 
       {/* XP bar */}
       <div>
-        <div
-          className="xp-bar-wrap"
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`XP: ${xpIntoLevel} de ${XP_PER_LEVEL}`}
-          title={`${xpIntoLevel} / ${XP_PER_LEVEL} XP`}
-        >
-          <motion.div
-            className="xp-bar"
-            animate={{ width: `${pct}%` }}
-            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            style={{ minWidth: pct > 0 ? 4 : 0 }}
-          />
-        </div>
+        <Progress
+          value={xpIntoLevel}
+          max={XP_PER_LEVEL}
+          variant="primary"
+          size="sm"
+          label={`XP: ${xpIntoLevel} de ${XP_PER_LEVEL}`}
+        />
         <p className="xp-hint">{xpToNext} XP → lv {level + 1}</p>
       </div>
 
@@ -135,21 +129,13 @@ export default function PlayerStats({
           <span>⚡ Energía</span>
           <span>{Math.floor(energy ?? 0)}/{effectiveEnergyCap}</span>
         </div>
-        <div
-          className="energy-bar-wrap"
-          role="progressbar"
-          aria-valuenow={energyPct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`Energía: ${Math.floor(energy ?? 0)} de ${effectiveEnergyCap}`}
-        >
-          <motion.div
-            className="energy-bar"
-            animate={{ width: `${energyPct}%` }}
-            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            style={{ minWidth: energyPct > 0 ? 2 : 0 }}
-          />
-        </div>
+        <Progress
+          value={energy ?? 0}
+          max={effectiveEnergyCap}
+          variant="teal"
+          size="sm"
+          label={`Energía: ${Math.floor(energy ?? 0)} de ${effectiveEnergyCap}`}
+        />
       </div>
 
       {/* CPM chip */}
@@ -159,7 +145,9 @@ export default function PlayerStats({
           <span className="hud-chip-value hud-chip-value--cyan">
             {cpmDisplay}
             {activeCoinBoost && (
-              <span className="boost-active-badge"> ×{activeCoinBoost.coinMultiplier}</span>
+              <Badge variant="gold" style={{ marginLeft: '0.35rem', verticalAlign: 'middle' }}>
+                ×{activeCoinBoost.coinMultiplier}
+              </Badge>
             )}
           </span>
         </div>
@@ -177,14 +165,16 @@ export default function PlayerStats({
       })()}
 
       {/* Idle claim (compact) */}
-      <button
-        className="idle-claim-btn"
+      <Button
+        variant="soft"
+        size="sm"
         onClick={handleTickIdle}
         type="button"
+        style={{ width: '100%' }}
         title="Reclamar monedas acumuladas"
       >
         Reclamar idle
-      </button>
+      </Button>
 
       {/* Zone & Power */}
       <div className="hud-zone-row">
@@ -239,21 +229,13 @@ export default function PlayerStats({
             ))}
           </select>
         </div>
-        <div
-          className="daily-goal-bar-wrap"
-          role="progressbar"
-          aria-valuenow={goalPct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`Objetivo: ${goalProgress} de ${dailyGoal} tareas`}
-        >
-          <motion.div
-            className={`daily-goal-bar ${goalMet ? 'goal-bar-done' : ''}`}
-            animate={{ width: `${goalPct}%` }}
-            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            style={{ minWidth: goalPct > 0 ? 4 : 0 }}
-          />
-        </div>
+        <Progress
+          value={goalProgress}
+          max={dailyGoal}
+          variant={goalMet ? 'green' : 'teal'}
+          size="sm"
+          label={`Objetivo: ${goalProgress} de ${dailyGoal} tareas`}
+        />
       </div>
     </div>
   )

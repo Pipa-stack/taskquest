@@ -6,6 +6,9 @@ import { playerRepository } from '../repositories/playerRepository.js'
 import ZoneQuestsPanel from './ZoneQuestsPanel.jsx'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
+import Card from '../ui/Card.jsx'
+import Button from '../ui/Button.jsx'
+import Badge from '../ui/Badge.jsx'
 
 /**
  * Zone map screen — shows all 6 zones as cards.
@@ -94,6 +97,7 @@ export default function ZonesMap({ player, powerScore, onNotify }) {
               style={{ '--zone-color': zone.themeColor }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
+              whileHover={!isActive && (isUnlocked || isNext) ? { y: -2 } : undefined}
               transition={{ duration: 0.15, delay: zone.id * 0.04 }}
             >
               <div className="zone-card-header">
@@ -112,7 +116,7 @@ export default function ZonesMap({ player, powerScore, onNotify }) {
                       </span>
                     )}
                     {zone.coinsPerMinuteBonus > 0 && (
-                      <span className="zone-bonus">+{zone.coinsPerMinuteBonus}/min</span>
+                      <Badge variant="gold">+{zone.coinsPerMinuteBonus}/min</Badge>
                     )}
                   </span>
                 </div>
@@ -120,24 +124,27 @@ export default function ZonesMap({ player, powerScore, onNotify }) {
 
               <div className="zone-card-actions">
                 {isUnlocked && (
-                  <button
-                    className={`zone-btn zone-btn-enter${isActive ? ' zone-btn-active' : ''}`}
-                    onClick={() => handleEnter(zone.id)}
+                  <Button
+                    variant={isActive ? 'soft' : 'primary'}
+                    size="sm"
+                    onClick={() => !isActive && handleEnter(zone.id)}
                     type="button"
+                    disabled={isActive}
                   >
                     {isActive ? 'Aquí' : 'Entrar'}
-                  </button>
+                  </Button>
                 )}
                 {isNext && !isUnlocked && (
-                  <button
-                    className={`zone-btn zone-btn-unlock${canUnlock ? '' : ' zone-btn-disabled'}`}
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => canUnlock && handleUnlock(zone)}
                     type="button"
                     disabled={!canUnlock}
                     title={!canUnlock ? `Necesitas ⚡${zone.requiredPower} power y 🪙${zone.unlockCostCoins}` : undefined}
                   >
                     Desbloquear ({zone.unlockCostCoins} 🪙)
-                  </button>
+                  </Button>
                 )}
                 {!isUnlocked && !isNext && (
                   <span className="zone-locked-badge">🔒 Bloqueada</span>

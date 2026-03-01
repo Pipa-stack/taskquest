@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import Button from '../ui/Button.jsx'
 
 const DIFFICULTIES = [
-  { id: 'easy',   label: 'Fácil',  cls: 'diff-easy' },
-  { id: 'normal', label: 'Normal', cls: 'diff-normal' },
+  { id: 'easy',   label: 'Fácil',   cls: 'diff-easy' },
+  { id: 'normal', label: 'Normal',  cls: 'diff-normal' },
   { id: 'hard',   label: 'Difícil', cls: 'diff-hard' },
 ]
 
@@ -58,14 +59,15 @@ export default function TaskForm({ onAdd }) {
             aria-label="Título de la nueva tarea"
           />
         </div>
-        <button
-          className="btn-add"
+        <Button
+          variant="primary"
+          size="md"
           type="submit"
           disabled={!title.trim() || busy}
           aria-label="Añadir tarea"
         >
           {busy ? '…' : '+ Añadir'}
-        </button>
+        </Button>
       </form>
     </div>
   )

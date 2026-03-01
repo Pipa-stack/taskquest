@@ -43,6 +43,8 @@ const TABS = [
   { id: 'Talentos',  label: '🌟 Talentos' },
 ]
 
+const TAB_IDS = TABS.map((t) => t.id)
+
 const SYNC_INTERVAL_MS = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
@@ -53,13 +55,6 @@ function loadSelectedDate() {
     if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored
   } catch (_) {}
   return todayKey()
-}
-
-const TAB_ANIM = {
-  initial:    { opacity: 0, y: 6 },
-  animate:    { opacity: 1, y: 0 },
-  exit:       { opacity: 0, y: -6 },
-  transition: { duration: 0.18 },
 }
 
 function App() {
@@ -73,8 +68,10 @@ function App() {
   const { user } = useAuth()
 
   const [activeTab, setActiveTab] = useState('Base')
+  const [prevTab, setPrevTab] = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [hudCollapsed, setHudCollapsed] = useState(false)
 
   const pendingOutboxCount = useLiveQuery(
     () => db.outbox.where('status').equals('pending').count(),
@@ -148,6 +145,20 @@ function App() {
     return xpEarned
   }, [completeTask, addNotification])
 
+  // Directional tab navigation
+  const handleTabChange = useCallback((tabId) => {
+    setPrevTab(activeTab)
+    setActiveTab(tabId)
+  }, [activeTab])
+
+  const tabDirection = TAB_IDS.indexOf(activeTab) > TAB_IDS.indexOf(prevTab) ? 1 : -1
+
+  const tabVariants = {
+    initial: (dir) => ({ opacity: 0, x: dir * 10 }),
+    animate: { opacity: 1, x: 0 },
+    exit:    (dir) => ({ opacity: 0, x: dir * -10 }),
+  }
+
   const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
 
   return (
@@ -164,7 +175,7 @@ function App() {
         </div>
       </header>
 
-      {/* Pill bar navigation */}
+      {/* Pill bar navigation — sticky on mobile */}
       <nav className="tabs-nav" role="tablist" aria-label="Navegación principal">
         {TABS.map(({ id, label }) => (
           <button
@@ -172,7 +183,7 @@ function App() {
             role="tab"
             aria-selected={activeTab === id}
             className={`tab-btn ${activeTab === id ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab(id)}
+            onClick={() => handleTabChange(id)}
           >
             {label}
           </button>
@@ -181,21 +192,37 @@ function App() {
 
       <div className="app-layout">
         <main className="app-main">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" custom={tabDirection}>
 
             {activeTab === 'Base' && (
-              <motion.div key="base" {...TAB_ANIM}>
+              <motion.div
+                key="base"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <BaseDashboard
                   player={player}
                   powerScore={powerScore}
                   onNotify={addNotification}
-                  onNavigateTo={setActiveTab}
+                  onNavigateTo={handleTabChange}
                 />
               </motion.div>
             )}
 
             {activeTab === 'Tasks' && (
-              <motion.div key="tasks" {...TAB_ANIM}>
+              <motion.div
+                key="tasks"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <button
                   className="mc-toggle-btn"
                   onClick={() => setCalendarOpen((o) => !o)}
@@ -218,7 +245,15 @@ function App() {
             )}
 
             {activeTab === 'Rewards' && (
-              <motion.div key="rewards" {...TAB_ANIM}>
+              <motion.div
+                key="rewards"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <RewardsShop
                   xp={player.xp}
                   rewardsUnlocked={player.rewardsUnlocked}
@@ -228,13 +263,29 @@ function App() {
             )}
 
             {activeTab === 'Stats' && (
-              <motion.div key="stats" {...TAB_ANIM}>
+              <motion.div
+                key="stats"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <StatsTab streak={player.streak} />
               </motion.div>
             )}
 
             {activeTab === 'Colección' && (
-              <motion.div key="collection" {...TAB_ANIM}>
+              <motion.div
+                key="collection"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <CharacterCollection
                   xp={player.xp}
                   unlockedCharacters={player.unlockedCharacters}
@@ -245,7 +296,15 @@ function App() {
             )}
 
             {activeTab === 'Boosts' && (
-              <motion.div key="boosts" {...TAB_ANIM}>
+              <motion.div
+                key="boosts"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <BoostShop
                   coins={player.coins}
                   boosts={player.boosts}
@@ -255,7 +314,15 @@ function App() {
             )}
 
             {activeTab === 'Mapa' && (
-              <motion.div key="mapa" {...TAB_ANIM}>
+              <motion.div
+                key="mapa"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <ZonesMap
                   player={player}
                   powerScore={powerScore}
@@ -265,7 +332,15 @@ function App() {
             )}
 
             {activeTab === 'Talentos' && (
-              <motion.div key="talentos" {...TAB_ANIM}>
+              <motion.div
+                key="talentos"
+                custom={tabDirection}
+                variants={tabVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
                 <TalentTree
                   essence={player.essence}
                   talents={player.talents}
@@ -277,26 +352,40 @@ function App() {
           </AnimatePresence>
         </main>
 
-        <aside className="app-sidebar">
-          <PlayerStats
-            xp={player.xp}
-            level={player.level}
-            streak={player.streak}
-            xpToNext={player.xpToNext}
-            combo={player.combo}
-            dailyGoal={player.dailyGoal}
-            syncStatus={player.syncStatus}
-            activeTeam={player.activeTeam}
-            coins={player.coins}
-            energy={player.energy}
-            energyCap={player.energyCap}
-            boosts={player.boosts}
-            coinsPerMinuteBase={player.coinsPerMinuteBase}
-            currentZone={player.currentZone}
-            powerScore={powerScore}
-            onNotify={addNotification}
-            onNavigateToMap={() => setActiveTab('Mapa')}
-          />
+        <aside className={`app-sidebar${hudCollapsed ? ' app-sidebar-collapsed' : ''}`}>
+          {/* Collapsible HUD toggle (mobile only) */}
+          <button
+            className="sidebar-hud-toggle"
+            type="button"
+            onClick={() => setHudCollapsed((c) => !c)}
+            aria-expanded={!hudCollapsed}
+            aria-controls="player-hud"
+          >
+            <span>📊 HUD del jugador</span>
+            <span aria-hidden="true">{hudCollapsed ? '▼' : '▲'}</span>
+          </button>
+
+          <div id="player-hud">
+            <PlayerStats
+              xp={player.xp}
+              level={player.level}
+              streak={player.streak}
+              xpToNext={player.xpToNext}
+              combo={player.combo}
+              dailyGoal={player.dailyGoal}
+              syncStatus={player.syncStatus}
+              activeTeam={player.activeTeam}
+              coins={player.coins}
+              energy={player.energy}
+              energyCap={player.energyCap}
+              boosts={player.boosts}
+              coinsPerMinuteBase={player.coinsPerMinuteBase}
+              currentZone={player.currentZone}
+              powerScore={powerScore}
+              onNotify={addNotification}
+              onNavigateToMap={() => handleTabChange('Mapa')}
+            />
+          </div>
         </aside>
       </div>
 

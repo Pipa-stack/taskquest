@@ -8,6 +8,9 @@ import { calcTeamMultiplier } from '../domain/idle.js'
 import { CHARACTERS } from '../domain/characters.js'
 import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
+import Card from '../ui/Card.jsx'
+import Button from '../ui/Button.jsx'
+import Progress from '../ui/Progress.jsx'
 
 const QUICK_ACTIONS = [
   { label: 'Boosts',    icon: '🚀', tab: 'Boosts' },
@@ -100,7 +103,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
     <div className="base-dashboard">
 
       {/* ── Hero card ────────────────────────────────────────────── */}
-      <div className="base-hero-card card">
+      <Card className="base-hero-card" hover>
 
         <div className="hero-top-row">
           <div className="hero-coins-block">
@@ -141,21 +144,13 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             <span>⚡ Energía</span>
             <span>{Math.floor(energy)}/{effectiveEnergyCap}</span>
           </div>
-          <div
-            className="hero-energy-bar"
-            role="progressbar"
-            aria-valuenow={Math.round(energyPct)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Energía: ${Math.floor(energy)} de ${effectiveEnergyCap}`}
-          >
-            <motion.div
-              className="hero-energy-fill"
-              animate={{ width: `${energyPct}%` }}
-              transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-              style={{ minWidth: energyPct > 0 ? 4 : 0 }}
-            />
-          </div>
+          <Progress
+            value={energy}
+            max={effectiveEnergyCap}
+            variant="teal"
+            size="lg"
+            label={`Energía: ${Math.floor(energy)} de ${effectiveEnergyCap}`}
+          />
         </div>
 
         {/* CTA Reclamar */}
@@ -191,10 +186,10 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             </>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* ── Status chips ─────────────────────────────────────────── */}
-      <div className="base-status card">
+      <Card className="base-status">
         <p className="base-status-title">Estado</p>
         <div className="status-chips">
 
@@ -254,15 +249,17 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* ── Quick actions ────────────────────────────────────────── */}
-      <div className="base-quick card">
+      <Card className="base-quick">
         <p className="base-quick-title">Acciones rápidas</p>
         <div className="quick-actions-grid">
           {QUICK_ACTIONS.map(({ label, icon, tab }) => (
-            <button
+            <Button
               key={tab}
+              variant="soft"
+              size="sm"
               className="quick-action-btn"
               onClick={() => onNavigateTo?.(tab)}
               type="button"
@@ -270,13 +267,13 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             >
               <span className="quick-action-icon">{icon}</span>
               <span>{label}</span>
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* ── Daily loop ───────────────────────────────────────────── */}
-      <div className="base-daily card">
+      <Card className="base-daily">
         <div className="daily-loop-header">
           <span className="daily-loop-title">🎯 Objetivo del día</span>
           <span className={`daily-loop-count ${goalMet ? 'daily-loop-count--met' : ''}`}>
@@ -297,14 +294,12 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
         </div>
 
         {/* Progress bar */}
-        <div className="progress-wrap">
-          <motion.div
-            className={`progress-fill ${goalMet ? 'progress-fill--done' : ''}`}
-            animate={{ width: `${goalPct}%` }}
-            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            style={{ minWidth: goalPct > 0 ? 4 : 0 }}
-          />
-        </div>
+        <Progress
+          value={goalProgress}
+          max={dailyGoal}
+          variant={goalMet ? 'green' : 'primary'}
+          label={`Objetivo diario: ${goalProgress} de ${dailyGoal}`}
+        />
 
         {goalMet && (
           <motion.p
@@ -315,7 +310,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
             ¡Objetivo cumplido! 🎉
           </motion.p>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { XP_PER_TASK } from '../domain/gamification.js'
 import CompletedSection from './CompletedSection.jsx'
 import XpBurst from './XpBurst.jsx'
+import Button from '../ui/Button.jsx'
 
 /**
  * Renders today's task list with animated pending / done separation.
@@ -91,16 +92,16 @@ export default function TaskList({ tasks, onComplete }) {
                     </span>
 
                     <div className="task-actions">
-                      <motion.button
-                        className="btn-complete"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleComplete(task.id)}
                         disabled={inFlight}
-                        whileHover={{ scale: 1.06 }}
-                        whileTap={{ scale: 0.9 }}
                         aria-label={`Completar tarea: ${task.title}`}
+                        style={{ minWidth: 80 }}
                       >
                         {inFlight ? '…' : '✓ Done'}
-                      </motion.button>
+                      </Button>
                       {burstXp && (
                         <XpBurst xp={burstXp} onDone={() => clearBurst(task.id)} />
                       )}

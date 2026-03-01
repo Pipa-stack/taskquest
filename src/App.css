@@ -1868,3 +1868,215 @@ ul { list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
    DAILY GOAL (legacy compat — still used inside PlayerStats)
    ══════════════════════════════════════════════════════════════════ */
 .daily-goal { margin-top: var(--s-3); }
+
+/* ══════════════════════════════════════════════════════════════════
+   UI SYSTEM — Button, Badge, Progress (src/ui/)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── ui-btn base ─────────────────────────────────────────────────── */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  border: none;
+  border-radius: var(--r-md);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  outline: none;
+  position: relative;
+}
+.ui-btn:focus-visible {
+  outline: 2px solid rgba(167,139,250,0.7);
+  outline-offset: 2px;
+}
+.ui-btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* sizes */
+.ui-btn--sm { padding: 0.28rem 0.65rem; font-size: 0.78rem; border-radius: var(--r-sm); }
+.ui-btn--md { padding: 0.55rem 1.1rem;  font-size: 0.88rem; }
+.ui-btn--lg { padding: 0.75rem 1.4rem;  font-size: 1rem;    border-radius: var(--r-lg); }
+
+/* variants */
+.ui-btn--primary {
+  background: var(--grad-primary);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(167,139,250,0.28);
+}
+.ui-btn--primary:hover:not(:disabled) { opacity: 0.9; }
+
+.ui-btn--ghost {
+  background: transparent;
+  border: 1.5px solid var(--c-purple);
+  color: var(--c-purple);
+}
+.ui-btn--ghost:hover:not(:disabled) { background: var(--c-purple-dim); }
+
+.ui-btn--soft {
+  background: rgba(167,139,250,0.12);
+  border: 1px solid rgba(167,139,250,0.25);
+  color: var(--c-purple);
+}
+.ui-btn--soft:hover:not(:disabled) { background: rgba(167,139,250,0.2); }
+
+.ui-btn--danger {
+  background: rgba(248,113,113,0.12);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: var(--c-red);
+}
+.ui-btn--danger:hover:not(:disabled) { background: rgba(248,113,113,0.22); }
+
+/* ── Badge variants ──────────────────────────────────────────────── */
+.badge--neutral { background: rgba(138,138,176,0.12); color: var(--c-muted); border: 1px solid rgba(138,138,176,0.2); }
+.badge--primary { background: rgba(167,139,250,0.14); color: var(--c-purple); border: 1px solid rgba(167,139,250,0.25); }
+.badge--gold    { background: rgba(251,191,36,0.12);  color: var(--c-yellow); border: 1px solid rgba(251,191,36,0.25); }
+.badge--teal    { background: rgba(34,211,238,0.1);   color: var(--c-cyan);   border: 1px solid rgba(34,211,238,0.2); }
+.badge--warn    { background: rgba(248,113,113,0.1);  color: var(--c-red);    border: 1px solid rgba(248,113,113,0.2); }
+
+/* ── Progress component ──────────────────────────────────────────── */
+.ui-progress {
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  position: relative;
+}
+.ui-progress--sm { height: 5px; }
+.ui-progress--md { height: 7px; }
+.ui-progress--lg { height: 10px; }
+
+.ui-progress__fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+}
+.ui-progress__fill--primary { background: var(--grad-primary); }
+.ui-progress__fill--gold    { background: var(--grad-gold); }
+.ui-progress__fill--green   { background: var(--grad-green); }
+.ui-progress__fill--teal    { background: linear-gradient(90deg, var(--c-cyan), var(--c-blue)); }
+
+/* ══════════════════════════════════════════════════════════════════
+   LAYOUT POLISH — wider shell, sidebar, spacing
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Wider main container */
+.app {
+  max-width: 1100px;
+}
+
+/* Wider sidebar */
+@media (min-width: 720px) {
+  .app-layout {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+/* Spacing tokens 8pt additions */
+:root {
+  --sp-8:  8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+}
+
+/* ── Tabs sticky on mobile ────────────────────────────────────────── */
+@media (max-width: 719px) {
+  .tabs-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin-left: calc(-1 * var(--s-4));
+    margin-right: calc(-1 * var(--s-4));
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+    background: rgba(15,15,19,0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* ── Collapsible HUD on mobile ────────────────────────────────────── */
+.sidebar-hud-toggle {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .sidebar-hud-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--sp-12) var(--sp-16);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    color: var(--c-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: var(--s-3);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .sidebar-hud-toggle:hover { background: var(--c-surface-2); border-color: var(--c-border-2); }
+  .sidebar-hud-toggle:focus-visible { outline: 2px solid rgba(167,139,250,0.7); outline-offset: 2px; }
+
+  .app-sidebar-collapsed .player-stats { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOTION PREMIUM — enhanced whileTap, hover lift on zone cards
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Quick action buttons get extra lift on hover */
+.quick-action-btn:hover {
+  background: rgba(167,139,250,0.12);
+  border-color: rgba(167,139,250,0.4);
+  color: var(--c-purple);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(167,139,250,0.15);
+}
+
+/* Zone cards hover lift */
+.zone-card:not(.zone-card-locked):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — focus rings, muted contrast, reduced motion
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Global focus ring for all interactive elements */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(167,139,250,0.7);
+  outline-offset: 2px;
+}
+
+/* Better muted text contrast (WCAG AA: ≥4.5:1 on dark bg) */
+.c-muted-aa { color: #a0a0c8; }  /* replaces --c-muted where needed */
+
+/* prefers-reduced-motion — kill all animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB SLIDE ANIMATION — directional x-offset support
+   ══════════════════════════════════════════════════════════════════ */
+.tab-panel-enter  { opacity: 0; }
+.tab-panel-active { opacity: 1; transition: opacity 0.18s ease; }
