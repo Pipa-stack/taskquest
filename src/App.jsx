@@ -31,19 +31,19 @@ import './App.css'
 
 let notifIdCounter = 0
 
-// Tab definitions with icons
-const TABS = [
-  { id: 'Base',      label: '🏠 Base' },
-  { id: 'Tasks',     label: '✓ Tasks' },
-  { id: 'Rewards',   label: '🎁 Rewards' },
-  { id: 'Stats',     label: '📊 Stats' },
-  { id: 'Colección', label: '👥 Colección' },
-  { id: 'Boosts',    label: '🚀 Boosts' },
-  { id: 'Mapa',      label: '🗺️ Mapa' },
-  { id: 'Talentos',  label: '🌟 Talentos' },
+// Sidebar navigation items
+const NAV_ITEMS = [
+  { id: 'Base',      icon: '⊞', label: 'Base' },
+  { id: 'Tasks',     icon: '☑', label: 'Tasks' },
+  { id: 'Rewards',   icon: '◇', label: 'Rewards' },
+  { id: 'Stats',     icon: '▣', label: 'Stats' },
+  { id: 'Colección', icon: '◉', label: 'Colección' },
+  { id: 'Boosts',    icon: '▲', label: 'Boosts' },
+  { id: 'Mapa',      icon: '◫', label: 'Mapa' },
+  { id: 'Talentos',  icon: '✦', label: 'Talentos' },
 ]
 
-const SYNC_INTERVAL_MS = 15_000
+const SYNC_INTERVAL_MS   = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
 
 // Persist the selected date across reloads (falls back to today if stale)
@@ -59,20 +59,20 @@ const TAB_ANIM = {
   initial:    { opacity: 0, y: 6 },
   animate:    { opacity: 1, y: 0 },
   exit:       { opacity: 0, y: -6 },
-  transition: { duration: 0.18 },
+  transition: { duration: 0.15 },
 }
 
 function App() {
   const today = todayKey()
 
   const [selectedDateKey, setSelectedDateKey] = useState(loadSelectedDate)
-  const [calendarOpen, setCalendarOpen] = useState(true)
+  const [calendarOpen, setCalendarOpen]       = useState(true)
 
   const { tasks, addTask, completeTask } = useTasks(selectedDateKey)
   const player = usePlayer()
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState('Base')
+  const [activeTab, setActiveTab]   = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
 
@@ -126,7 +126,7 @@ function App() {
   }, [])
 
   const handleComplete = useCallback(async (taskId) => {
-    const prevXp = playerXpRef.current
+    const prevXp    = playerXpRef.current
     const prevLevel = xpToLevel(prevXp)
 
     const { xpEarned, newAchievements } = await completeTask(taskId)
@@ -150,37 +150,80 @@ function App() {
 
   const isSyncing = user && supabase && (pendingOutboxCount ?? 0) > 0
 
+  // Derive the page label shown in the top bar
+  const pageLabel = NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? activeTab
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1 className="app-title">TaskQuest</h1>
-        <div className="app-header-right">
-          <p className="app-date">Hoy · {today}</p>
-          {isSyncing && (
-            <span className="sync-indicator" title="Sincronizando con la nube…">
-              ☁ syncing…
-            </span>
-          )}
+    <div className="app-shell">
+
+      {/* ─── Left Sidebar ──────────────────────────────────────────── */}
+      <aside className="sidebar" aria-label="Navegación principal">
+
+        {/* Brand */}
+        <div className="sidebar-brand" aria-label="TaskQuest">
+          <span className="sidebar-logo" aria-hidden="true">TQ</span>
+          <span className="sidebar-title">TaskQuest</span>
         </div>
-      </header>
 
-      {/* Pill bar navigation */}
-      <nav className="tabs-nav" role="tablist" aria-label="Navegación principal">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={activeTab === id}
-            className={`tab-btn ${activeTab === id ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+        {/* Navigation */}
+        <nav className="sidebar-nav" role="navigation">
+          {NAV_ITEMS.map(({ id, icon, label }) => (
+            <button
+              key={id}
+              type="button"
+              className={`sidebar-nav-item${activeTab === id ? ' active' : ''}`}
+              onClick={() => setActiveTab(id)}
+              aria-current={activeTab === id ? 'page' : undefined}
+            >
+              <span className="sidebar-nav-icon" aria-hidden="true">{icon}</span>
+              <span className="sidebar-nav-label">{label}</span>
+            </button>
+          ))}
+        </nav>
 
-      <div className="app-layout">
-        <main className="app-main">
+        {/* Player HUD */}
+        <div className="sidebar-hud">
+          <PlayerStats
+            xp={player.xp}
+            level={player.level}
+            streak={player.streak}
+            xpToNext={player.xpToNext}
+            combo={player.combo}
+            dailyGoal={player.dailyGoal}
+            syncStatus={player.syncStatus}
+            activeTeam={player.activeTeam}
+            coins={player.coins}
+            energy={player.energy}
+            energyCap={player.energyCap}
+            boosts={player.boosts}
+            coinsPerMinuteBase={player.coinsPerMinuteBase}
+            currentZone={player.currentZone}
+            powerScore={powerScore}
+            onNotify={addNotification}
+            onNavigateToMap={() => setActiveTab('Mapa')}
+          />
+        </div>
+
+      </aside>
+
+      {/* ─── Main body ─────────────────────────────────────────────── */}
+      <div className="app-body">
+
+        {/* Top bar */}
+        <header className="top-bar">
+          <span className="top-bar-page">{pageLabel}</span>
+          <div className="top-bar-meta">
+            <span className="top-bar-date">{today}</span>
+            {isSyncing && (
+              <span className="sync-indicator" title="Sincronizando con la nube…">
+                syncing…
+              </span>
+            )}
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="main-content">
           <AnimatePresence mode="wait">
 
             {activeTab === 'Base' && (
@@ -277,27 +320,6 @@ function App() {
           </AnimatePresence>
         </main>
 
-        <aside className="app-sidebar">
-          <PlayerStats
-            xp={player.xp}
-            level={player.level}
-            streak={player.streak}
-            xpToNext={player.xpToNext}
-            combo={player.combo}
-            dailyGoal={player.dailyGoal}
-            syncStatus={player.syncStatus}
-            activeTeam={player.activeTeam}
-            coins={player.coins}
-            energy={player.energy}
-            energyCap={player.energyCap}
-            boosts={player.boosts}
-            coinsPerMinuteBase={player.coinsPerMinuteBase}
-            currentZone={player.currentZone}
-            powerScore={powerScore}
-            onNotify={addNotification}
-            onNavigateToMap={() => setActiveTab('Mapa')}
-          />
-        </aside>
       </div>
 
       <LevelUpOverlay
@@ -310,6 +332,7 @@ function App() {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
+
     </div>
   )
 }
