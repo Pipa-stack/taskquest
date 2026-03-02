@@ -90,14 +90,27 @@ function App() {
   const playerXpRef = useRef(player.xp)
   useEffect(() => { playerXpRef.current = player.xp }, [player.xp])
 
-  // Sync loop
+  // Mutex ref: prevents a new sync from starting while a previous one is still
+  // running. Without this, rapid re-renders or a slow network could cause
+  // overlapping sync passes that read/write stale outbox state concurrently.
+  const isSyncingRef = useRef(false)
+
+  // Sync loop — serialized: push tasks → push player → pull tasks → pull player
   useEffect(() => {
     if (!user || !supabase) return
-    const sync = () => {
-      pushOutbox({ supabase, userId: user.id }).catch(console.warn)
-      pullRemote({ supabase, userId: user.id }).catch(console.warn)
-      pushPlayerOutbox({ supabase, userId: user.id }).catch(console.warn)
-      pullPlayerRemote({ supabase, userId: user.id }).catch(console.warn)
+    const sync = async () => {
+      if (isSyncingRef.current) return
+      isSyncingRef.current = true
+      try {
+        await pushOutbox({ supabase, userId: user.id })
+        await pushPlayerOutbox({ supabase, userId: user.id })
+        await pullRemote({ supabase, userId: user.id })
+        await pullPlayerRemote({ supabase, userId: user.id })
+      } catch (err) {
+        console.warn('[sync]', err)
+      } finally {
+        isSyncingRef.current = false
+      }
     }
     sync()
     const intervalId = setInterval(sync, SYNC_INTERVAL_MS)
@@ -110,6 +123,10 @@ function App() {
     const intervalId = setInterval(tick, IDLE_TICK_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [])
+
+  // Stable reference so LevelUpOverlay's useEffect dep [visible, onDone] does
+  // not reset the auto-dismiss timer on every unrelated App re-render.
+  const handleLevelUpDone = useCallback(() => setShowLevelUp(false), [])
 
   const handleSelectDateKey = useCallback((dateKey) => {
     setSelectedDateKey(dateKey)
@@ -197,6 +214,7 @@ function App() {
             energyCap={player.energyCap}
             boosts={player.boosts}
             coinsPerMinuteBase={player.coinsPerMinuteBase}
+            talents={player.talents}
             currentZone={player.currentZone}
             powerScore={powerScore}
             onNotify={addNotification}
@@ -325,7 +343,7 @@ function App() {
       <LevelUpOverlay
         visible={showLevelUp}
         level={player.level}
-        onDone={() => setShowLevelUp(false)}
+        onDone={handleLevelUpDone}
       />
 
       <Notifications

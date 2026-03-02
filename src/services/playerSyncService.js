@@ -2,6 +2,20 @@ import db from '../db/db.js'
 
 const PLAYER_LAST_PULLED_KEY = 'taskquest.playerLastPulledAt'
 const PUSH_BATCH_SIZE = 10
+const MAX_RETRIES = 5
+
+/**
+ * Returns true if an outbox item is eligible to be (re-)tried.
+ * Mirrors the same helper in taskSyncService – exported for testing.
+ *
+ * @param {{ status: string, retryCount?: number }} item
+ * @returns {boolean}
+ */
+export function isRetryablePlayer(item) {
+  if (item.status === 'pending') return true
+  if (item.status === 'failed') return (item.retryCount ?? 0) < MAX_RETRIES
+  return false
+}
 
 /**
  * Pure helper: decides whether a remote player_state should overwrite the local one.
@@ -34,8 +48,8 @@ export async function pushPlayerOutbox({ supabase, userId }) {
 
   const allPending = await db.outbox
     .where('status')
-    .equals('pending')
-    .filter((item) => item.type === 'UPSERT_PLAYER')
+    .anyOf(['pending', 'failed'])
+    .filter((item) => item.type === 'UPSERT_PLAYER' && isRetryablePlayer(item))
     .sortBy('createdAt')
 
   const batch = allPending.slice(0, PUSH_BATCH_SIZE)

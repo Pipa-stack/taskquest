@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ZONE_CATALOG, canUnlockZone } from '../domain/zones.js'
 import { playerRepository } from '../repositories/playerRepository.js'
 import ZoneQuestsPanel from './ZoneQuestsPanel.jsx'
 import db from '../db/db.js'
-import { todayKey } from '../domain/dateKey.js'
+import { todayKey, localDateKey } from '../domain/dateKey.js'
 
 /**
  * Zone map screen — shows all 6 zones as cards.
@@ -25,14 +25,23 @@ import { todayKey } from '../domain/dateKey.js'
 export default function ZonesMap({ player, powerScore, onNotify }) {
   const [selectedZone, setSelectedZone] = useState(player.currentZone ?? 1)
 
+  // Keep selectedZone in sync when player.currentZone changes externally
+  // (e.g. after a remote pull overwrites the local record).
+  useEffect(() => {
+    setSelectedZone(player.currentZone ?? 1)
+  }, [player.currentZone])
+
   // Count tasks completed this week for quest progress (tasks_count type)
   const today = todayKey()
   const weekStart = useMemo(() => {
-    const d = new Date(today)
-    const day = d.getDay() // 0 = Sun
-    const diff = (day + 6) % 7 // Monday-based: Mon=0 … Sun=6
-    d.setDate(d.getDate() - diff)
-    return d.toISOString().slice(0, 10)
+    // Parse today as LOCAL date components to avoid the UTC-midnight pitfall
+    // of `new Date('YYYY-MM-DD')` which shifts the day in western timezones.
+    const [y, m, d] = today.split('-').map(Number)
+    const date = new Date(y, m - 1, d)  // local midnight
+    const day = date.getDay()           // local day of week (0 = Sun)
+    const diff = (day + 6) % 7         // Monday-based offset: Mon=0 … Sun=6
+    date.setDate(date.getDate() - diff)
+    return localDateKey(date)           // YYYY-MM-DD in LOCAL timezone
   }, [today])
 
   const tasksThisWeek = useLiveQuery(

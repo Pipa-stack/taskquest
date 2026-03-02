@@ -71,7 +71,9 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
 
   const handleClaim = async () => {
     if (claimState) return
-    const { coinsEarned } = await playerRepository.tickIdle(nowMs)
+    // Use Date.now() here, not the render-captured `nowMs`, so the elapsed
+    // time calculation in tickIdle reflects the actual moment of the click.
+    const { coinsEarned } = await playerRepository.tickIdle(Date.now())
     if (coinsEarned > 0) {
       setClaimState('claimed')
       onNotify?.(`+${coinsEarned} monedas reclamadas`)

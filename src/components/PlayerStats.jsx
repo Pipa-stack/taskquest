@@ -14,7 +14,7 @@ import { playerRepository } from '../repositories/playerRepository.js'
  */
 export default function PlayerStats({
   xp, level, streak, xpToNext, combo, dailyGoal, syncStatus, activeTeam,
-  coins, energy, energyCap, boosts, coinsPerMinuteBase,
+  coins, energy, energyCap, boosts, coinsPerMinuteBase, talents,
   currentZone, powerScore,
   onNotify, onNavigateToMap,
 }) {
@@ -35,8 +35,11 @@ export default function PlayerStats({
 
   const nowMs = Date.now()
   const activeBoostList = getActiveBoosts(boosts ?? [], nowMs)
-  const talentBonuses = computeTalentBonuses({})
-  const effectiveEnergyCap = applyBoostsToCaps(energyCap ?? 100, activeBoostList)
+  const talentBonuses = computeTalentBonuses(talents ?? {})
+  const effectiveEnergyCap = applyBoostsToCaps(
+    (energyCap ?? 100) + talentBonuses.energyCapBonus,
+    activeBoostList
+  )
   const energyPct = effectiveEnergyCap > 0
     ? Math.round(((energy ?? 0) / effectiveEnergyCap) * 100)
     : 0

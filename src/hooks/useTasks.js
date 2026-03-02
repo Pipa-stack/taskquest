@@ -104,19 +104,19 @@ export function useTasks(selectedDate) {
 
       const streakUpdate = calcUpdatedStreak(player, now)
 
-      // Count today's completed tasks (after this one)
-      const todayDone = await db.tasks
+      // Count today's completed tasks.
+      // NOTE: the db.tasks.update() above already committed status='done',
+      // so the count already includes the task we just completed – no +1.
+      const todayTasksCount = await db.tasks
         .where('[dueDate+status]')
         .equals([today, 'done'])
         .count()
-      const todayTasksCount = todayDone + 1  // +1 for the task we just completed
 
-      // Count all-time completed tasks
-      const totalTasks = await db.tasks
+      // Count all-time completed tasks (same reasoning – no +1).
+      const totalTasksCount = await db.tasks
         .where('status')
         .equals('done')
         .count()
-      const totalTasksCount = totalTasks + 1
 
       const dailyGoal = player.dailyGoal ?? 3
       const dailyGoalMet = todayTasksCount >= dailyGoal

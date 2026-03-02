@@ -3,6 +3,22 @@ import db from '../db/db.js'
 const LAST_PULLED_KEY = 'taskquest.lastPulledAt'
 const PUSH_BATCH_SIZE = 25
 const PULL_LIMIT = 500
+const MAX_RETRIES = 5
+
+/**
+ * Returns true if an outbox item is eligible to be (re-)tried.
+ * Items with status 'pending' are always eligible.
+ * Items with status 'failed' are retried up to MAX_RETRIES times.
+ * Exported for unit testing.
+ *
+ * @param {{ status: string, retryCount?: number }} item
+ * @returns {boolean}
+ */
+export function isRetryable(item) {
+  if (item.status === 'pending') return true
+  if (item.status === 'failed') return (item.retryCount ?? 0) < MAX_RETRIES
+  return false
+}
 
 /**
  * Pure helper: decides whether a remote task should overwrite the local one.
@@ -31,8 +47,12 @@ export async function pushOutbox({ supabase, userId }) {
 
   const allPending = await db.outbox
     .where('status')
-    .equals('pending')
-    .filter((item) => item.type === 'UPSERT_TASK' || item.type === 'DELETE_TASK')
+    .anyOf(['pending', 'failed'])
+    .filter(
+      (item) =>
+        (item.type === 'UPSERT_TASK' || item.type === 'DELETE_TASK') &&
+        isRetryable(item)
+    )
     .sortBy('createdAt')
 
   const batch = allPending.slice(0, PUSH_BATCH_SIZE)

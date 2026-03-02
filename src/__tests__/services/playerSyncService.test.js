@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldOverwritePlayer } from '../../services/playerSyncService.js'
+import { shouldOverwritePlayer, isRetryablePlayer } from '../../services/playerSyncService.js'
 
 describe('shouldOverwritePlayer', () => {
   it('returns true when local is null (no local player)', () => {
@@ -56,5 +56,27 @@ describe('shouldOverwritePlayer', () => {
         { updated_at: '2024-01-31T23:59:59.000Z' }
       )
     ).toBe(false)
+  })
+})
+
+describe('isRetryablePlayer – retry selection for failed player outbox items', () => {
+  it('returns true for pending items', () => {
+    expect(isRetryablePlayer({ status: 'pending', retryCount: 0 })).toBe(true)
+  })
+
+  it('returns true for failed items with retryCount below MAX_RETRIES (4)', () => {
+    expect(isRetryablePlayer({ status: 'failed', retryCount: 4 })).toBe(true)
+  })
+
+  it('returns false for failed items that have hit MAX_RETRIES (5)', () => {
+    expect(isRetryablePlayer({ status: 'failed', retryCount: 5 })).toBe(false)
+  })
+
+  it('returns false for sent items', () => {
+    expect(isRetryablePlayer({ status: 'sent', retryCount: 0 })).toBe(false)
+  })
+
+  it('treats missing retryCount as 0 for failed items', () => {
+    expect(isRetryablePlayer({ status: 'failed' })).toBe(true)  // 0 < 5
   })
 })
