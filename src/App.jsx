@@ -24,8 +24,9 @@ import { computePowerScore } from './domain/power.js'
 import { CHARACTERS } from './domain/characters.js'
 import db from './db/db.js'
 import { supabase } from './lib/supabase.js'
-import { pushOutbox, pullRemote } from './services/taskSyncService.js'
+import { pushOutbox, pullRemote, isRetryable } from './services/taskSyncService.js'
 import { pushPlayerOutbox, pullPlayerRemote } from './services/playerSyncService.js'
+import { cleanupDeadOutbox } from './services/outboxCleanupService.js'
 import { playerRepository } from './repositories/playerRepository.js'
 import './App.css'
 
@@ -74,10 +75,21 @@ function App() {
 
   const [activeTab, setActiveTab]   = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
+  // Incremented on every level-up to force LevelUpOverlay remount, which
+  // restarts its auto-dismiss timer even for back-to-back level-ups.
+  const [levelUpKey, setLevelUpKey] = useState(0)
   const [notifications, setNotifications] = useState([])
 
+  // Count items that still need syncing: pending ones + failed ones that
+  // will be retried (retryCount < MAX_RETRIES). Dead-letter items (>=5 retries)
+  // are excluded because they will never be pushed and aren't actionable.
   const pendingOutboxCount = useLiveQuery(
-    () => db.outbox.where('status').equals('pending').count(),
+    () =>
+      db.outbox
+        .where('status')
+        .anyOf(['pending', 'failed'])
+        .filter(isRetryable)
+        .count(),
     [],
     0
   )
@@ -106,6 +118,9 @@ function App() {
         await pushPlayerOutbox({ supabase, userId: user.id })
         await pullRemote({ supabase, userId: user.id })
         await pullPlayerRemote({ supabase, userId: user.id })
+        // Prune dead-letter outbox items once per successful sync cycle.
+        // Best-effort: failure here must not abort the sync result.
+        await cleanupDeadOutbox().catch(console.warn)
       } catch (err) {
         console.warn('[sync]', err)
       } finally {
@@ -151,6 +166,7 @@ function App() {
     if (xpEarned > 0) {
       const newLevel = xpToLevel(prevXp + xpEarned)
       if (newLevel > prevLevel) {
+        setLevelUpKey((k) => k + 1)
         setShowLevelUp(true)
         addNotification(`LEVEL UP! Ahora eres nivel ${newLevel} 🎉`)
       }
@@ -341,6 +357,7 @@ function App() {
       </div>
 
       <LevelUpOverlay
+        key={levelUpKey}
         visible={showLevelUp}
         level={player.level}
         onDone={handleLevelUpDone}

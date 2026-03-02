@@ -32,3 +32,22 @@ export function yesterdayKey() {
   d.setDate(d.getDate() - 1)
   return localDateKey(d)
 }
+
+/**
+ * Given a YYYY-MM-DD string, returns the Monday of that week as YYYY-MM-DD
+ * in LOCAL timezone (Monday-based week).
+ *
+ * Uses `new Date(y, m-1, d)` (local midnight) instead of `new Date('YYYY-MM-DD')`
+ * (UTC midnight) to avoid the day-shift bug in timezones west of UTC.
+ *
+ * @param {string} todayStr  YYYY-MM-DD in local timezone
+ * @returns {string}         YYYY-MM-DD of the Monday of that week
+ */
+export function computeWeekStartKey(todayStr) {
+  const [y, m, d] = todayStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d) // local midnight
+  const day = date.getDay()          // local day 0 = Sun … 6 = Sat
+  const diff = (day + 6) % 7         // monday-start: Mon=0 … Sun=6
+  date.setDate(date.getDate() - diff)
+  return localDateKey(date)
+}

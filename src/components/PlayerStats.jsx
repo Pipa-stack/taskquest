@@ -155,7 +155,7 @@ export default function PlayerStats({
         </div>
       </div>
 
-      {/* CPM chip */}
+      {/* CPM chip + optional talent multiplier label */}
       <div className="hud-chips-row">
         <div className="hud-chip" style={{ flex: 2 }}>
           <span className="hud-chip-label">Monedas/min</span>
@@ -166,6 +166,17 @@ export default function PlayerStats({
             )}
           </span>
         </div>
+        {talentBonuses.idleCoinMult > 1 && (
+          <div
+            className="hud-chip"
+            title="Multiplicador de talentos aplicado a monedas idle"
+          >
+            <span className="hud-chip-label">Talentos</span>
+            <span className="hud-chip-value hud-chip-value--cyan">
+              ×{talentBonuses.idleCoinMult.toFixed(2)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Active boost */}

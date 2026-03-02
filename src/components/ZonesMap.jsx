@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ZONE_CATALOG, canUnlockZone } from '../domain/zones.js'
 import { playerRepository } from '../repositories/playerRepository.js'
 import ZoneQuestsPanel from './ZoneQuestsPanel.jsx'
 import db from '../db/db.js'
-import { todayKey, localDateKey } from '../domain/dateKey.js'
+import { todayKey, computeWeekStartKey } from '../domain/dateKey.js'
 
 /**
  * Zone map screen — shows all 6 zones as cards.
@@ -33,16 +33,7 @@ export default function ZonesMap({ player, powerScore, onNotify }) {
 
   // Count tasks completed this week for quest progress (tasks_count type)
   const today = todayKey()
-  const weekStart = useMemo(() => {
-    // Parse today as LOCAL date components to avoid the UTC-midnight pitfall
-    // of `new Date('YYYY-MM-DD')` which shifts the day in western timezones.
-    const [y, m, d] = today.split('-').map(Number)
-    const date = new Date(y, m - 1, d)  // local midnight
-    const day = date.getDay()           // local day of week (0 = Sun)
-    const diff = (day + 6) % 7         // Monday-based offset: Mon=0 … Sun=6
-    date.setDate(date.getDate() - diff)
-    return localDateKey(date)           // YYYY-MM-DD in LOCAL timezone
-  }, [today])
+  const weekStart = computeWeekStartKey(today)
 
   const tasksThisWeek = useLiveQuery(
     () =>
