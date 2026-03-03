@@ -313,7 +313,6 @@ function App() {
             streak={player.streak}
             xpToNext={player.xpToNext}
             combo={player.combo}
-            dailyGoal={player.dailyGoal}
             syncStatus={player.syncStatus}
             activeTeam={player.activeTeam}
             coins={player.coins}
