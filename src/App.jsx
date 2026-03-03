@@ -27,20 +27,31 @@ import { supabase } from './lib/supabase.js'
 import { pushOutbox, pullRemote } from './services/taskSyncService.js'
 import { pushPlayerOutbox, pullPlayerRemote } from './services/playerSyncService.js'
 import { playerRepository } from './repositories/playerRepository.js'
+import {
+  LayoutDashboard,
+  CheckSquare,
+  Gift,
+  BarChart3,
+  Users,
+  Zap,
+  Map,
+  Sparkles,
+  Loader2,
+} from 'lucide-react'
 import './App.css'
 
 let notifIdCounter = 0
 
-// Sidebar navigation items
+// Sidebar navigation items — Icon is a Lucide component (stroke, 18px)
 const NAV_ITEMS = [
-  { id: 'Base',      icon: '⊞', label: 'Base' },
-  { id: 'Tasks',     icon: '☑', label: 'Tareas' },
-  { id: 'Rewards',   icon: '◇', label: 'Recompensas' },
-  { id: 'Stats',     icon: '▣', label: 'Estadísticas' },
-  { id: 'Colección', icon: '◉', label: 'Colección' },
-  { id: 'Boosts',    icon: '▲', label: 'Boosts' },
-  { id: 'Mapa',      icon: '◫', label: 'Mapa' },
-  { id: 'Talentos',  icon: '✦', label: 'Talentos' },
+  { id: 'Base',      Icon: LayoutDashboard, label: 'Base' },
+  { id: 'Tasks',     Icon: CheckSquare,     label: 'Tareas' },
+  { id: 'Rewards',   Icon: Gift,            label: 'Recompensas' },
+  { id: 'Stats',     Icon: BarChart3,       label: 'Estadísticas' },
+  { id: 'Colección', Icon: Users,           label: 'Colección' },
+  { id: 'Boosts',    Icon: Zap,             label: 'Boosts' },
+  { id: 'Mapa',      Icon: Map,             label: 'Mapa' },
+  { id: 'Talentos',  Icon: Sparkles,        label: 'Talentos' },
 ]
 
 /** Formats a YYYY-MM-DD dateKey as a natural Spanish date string.
@@ -182,7 +193,7 @@ function App() {
 
         {/* Navigation */}
         <nav className="sidebar-nav" role="navigation">
-          {NAV_ITEMS.map(({ id, icon, label }) => (
+          {NAV_ITEMS.map(({ id, Icon, label }) => (
             <button
               key={id}
               type="button"
@@ -190,7 +201,7 @@ function App() {
               onClick={() => setActiveTab(id)}
               aria-current={activeTab === id ? 'page' : undefined}
             >
-              <span className="sidebar-nav-icon" aria-hidden="true">{icon}</span>
+              <Icon className="sidebar-nav-icon" size={18} aria-hidden="true" />
               <span className="sidebar-nav-label">{label}</span>
             </button>
           ))}
@@ -230,8 +241,13 @@ function App() {
           <div className="top-bar-meta">
             <span className="top-bar-date">{formatDateES(today)}</span>
             {isSyncing && (
-              <span className="sync-indicator" title="Sincronizando con la nube…">
-                syncing…
+              <span
+                className="sync-indicator"
+                title="Sincronizando cambios…"
+                aria-label="Sincronizando cambios con el servidor"
+              >
+                <Loader2 className="spin" size={12} aria-hidden="true" />
+                Sincronizando…
               </span>
             )}
           </div>
