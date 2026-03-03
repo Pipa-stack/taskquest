@@ -115,15 +115,18 @@ export default function CharacterCollection({ xp, unlockedCharacters, activeTeam
                     </button>
                   )
                 ) : (
-                  <button
-                    className="char-btn char-btn--buy"
-                    onClick={() => handleBuy(char)}
-                    disabled={xp < char.cost}
-                    title={`Coste: ${char.cost} XP`}
-                    aria-label={`Desbloquear a ${char.name} por ${char.cost} XP`}
-                  >
-                    {char.cost} XP
-                  </button>
+                  <>
+                    <span className="char-locked-badge" aria-hidden="true">Bloqueado</span>
+                    <button
+                      className="char-btn char-btn--buy"
+                      onClick={() => handleBuy(char)}
+                      disabled={xp < char.cost}
+                      title={`Coste: ${char.cost} XP`}
+                      aria-label={`Desbloquear a ${char.name} por ${char.cost} XP`}
+                    >
+                      {char.cost} XP
+                    </button>
+                  </>
                 )}
               </div>
             )

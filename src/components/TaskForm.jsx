@@ -30,20 +30,23 @@ export default function TaskForm({ onAdd }) {
 
   return (
     <div className="task-form-wrapper">
-      {/* Difficulty segmented control */}
-      <div className="difficulty-control" role="group" aria-label="Dificultad de la tarea">
+      {/* Difficulty segmented control — UI only, not stored yet */}
+      <div className="difficulty-control" role="group" aria-label="Dificultad de la tarea (próximamente)">
         {DIFFICULTIES.map(({ id, label, cls }) => (
           <button
             key={id}
             type="button"
             className={`diff-btn ${cls} ${difficulty === id ? 'diff-active' : ''}`}
             onClick={() => setDifficulty(id)}
+            disabled
             aria-pressed={difficulty === id}
+            title="Próximamente: la dificultad afectará al XP"
           >
             {label}
           </button>
         ))}
       </div>
+      <p className="difficulty-hint">Próximamente: la dificultad afectará al XP</p>
 
       {/* Input + submit */}
       <form className="task-form" onSubmit={handleSubmit}>

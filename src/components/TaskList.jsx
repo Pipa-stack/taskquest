@@ -78,8 +78,8 @@ export default function TaskList({ tasks, onComplete }) {
                     <span className="task-title">
                       {task.title}
                       {task.isClone && (
-                        <span className="clone-badge" title="Tarea duplicada — 0 XP (anti-farming)">
-                          clone · 0 XP
+                        <span className="clone-badge" title="Tarea repetida. No otorga experiencia." aria-label="Sin XP: tarea repetida">
+                          Sin XP
                         </span>
                       )}
                       {task.syncStatus === 'pending' && (

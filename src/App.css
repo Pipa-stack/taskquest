@@ -878,6 +878,22 @@ ul, ol { list-style: none; }
   color: #a5b4fc;
 }
 
+/* Difficulty disabled state — feature not yet active */
+.diff-btn:disabled,
+.diff-btn:disabled:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--c-border);
+  color: var(--c-muted);
+  background: var(--c-surface-2);
+}
+
+.difficulty-hint {
+  font-size: 0.72rem;
+  color: var(--c-dim);
+  margin: 0 0 var(--s-3);
+}
+
 .task-form {
   display: flex;
   gap: var(--s-2);
@@ -1301,6 +1317,16 @@ ul, ol { list-style: none; }
 
 .char-card:hover { border-color: var(--c-border-2); transform: translateY(-2px); }
 
+/* Locked cards — desaturated and dimmed, no hover lift */
+.char-card--locked {
+  filter: grayscale(0.85);
+  opacity: 0.6;
+}
+.char-card--locked:hover {
+  transform: none;
+  border-color: var(--c-border);
+}
+
 .char-card-emoji { font-size: 2rem; }
 .char-card-name  { font-size: 0.7rem; font-weight: 500; color: var(--c-muted); text-align: center; }
 
@@ -1343,6 +1369,18 @@ ul, ol { list-style: none; }
 .char-btn--add    { background: var(--c-success-dim); border-color: rgba(16,185,129,0.22); color: var(--c-success); }
 .char-btn--remove { background: var(--c-danger-dim);  border-color: rgba(239,68,68,0.22);  color: var(--c-danger); }
 .char-btn--buy    { background: var(--c-accent-dim);  border-color: rgba(99,102,241,0.22); color: #a5b4fc; }
+
+.char-locked-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-dim);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-pill);
+  padding: 1px 6px;
+}
 
 /* Team */
 .team-section { display: flex; flex-direction: column; gap: var(--s-2); }
