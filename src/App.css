@@ -2010,6 +2010,9 @@ ul, ol { list-style: none; }
   color: var(--c-muted);
 }
 
+/* ── Mobile stats bar — hidden on desktop ────────────────────────── */
+.mstat-bar { display: none; }
+
 /* ══════════════════════════════════════════════════════════════════
    RESPONSIVE — Mobile: bottom tab bar
    ══════════════════════════════════════════════════════════════════ */
@@ -2060,6 +2063,89 @@ ul, ol { list-style: none; }
 
   .sidebar-nav-icon { display: block; }
 
+  /* Mobile stats bar */
+  .mstat-bar {
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 49;
+    gap: var(--s-3);
+    height: 44px;
+    padding: 0 var(--s-4);
+    background: var(--c-bg);
+    border-bottom: 1px solid var(--c-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mstat-bar::-webkit-scrollbar { display: none; }
+
+  .mstat-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .mstat-group--row {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-1);
+  }
+
+  .mstat-label {
+    font-size: 0.65rem;
+    color: var(--c-muted);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .mstat-energy-nums { font-variant-numeric: tabular-nums; }
+
+  .mstat-value {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--c-text);
+    line-height: 1;
+  }
+
+  .mstat-value--gold { color: var(--c-warning); }
+
+  .mstat-track {
+    height: 3px;
+    border-radius: var(--r-pill);
+    background: var(--c-surface-2);
+    overflow: hidden;
+  }
+
+  .mstat-track--xp     { width: 56px; }
+  .mstat-track--energy { width: 64px; }
+
+  .mstat-fill {
+    height: 100%;
+    border-radius: var(--r-pill);
+    transition: width 0.3s ease;
+  }
+
+  .mstat-fill--xp     { background: var(--c-accent); }
+  .mstat-fill--energy { background: var(--c-success); }
+
+  .mstat-sep {
+    flex-shrink: 0;
+    width: 1px;
+    height: 20px;
+    background: var(--c-border-2);
+    border-radius: var(--r-pill);
+  }
+
+  .mstat-sync {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--c-dim);
+  }
+
   .sidebar-hud { display: none; }
 
   .app-body {
@@ -2078,6 +2164,10 @@ ul, ol { list-style: none; }
   }
 
   .notif-item { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mstat-fill { transition: none; }
 }
 
 @media (max-width: 480px) {

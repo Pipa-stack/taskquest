@@ -19,6 +19,7 @@ import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import ShortcutsOverlay from './components/ShortcutsOverlay.jsx'
+import MobileStatsBar from './components/MobileStatsBar.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -349,6 +350,16 @@ function App() {
             )}
           </div>
         </header>
+
+        {/* Mobile compact stats bar — visible only on ≤768px */}
+        <MobileStatsBar
+          level={player.level}
+          xpToNext={player.xpToNext}
+          coins={player.coins}
+          energy={player.energy}
+          energyCap={player.energyCap}
+          isSyncing={isSyncing}
+        />
 
         {/* Page content */}
         <main className="main-content">
