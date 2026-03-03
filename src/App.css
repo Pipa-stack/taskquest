@@ -1862,6 +1862,216 @@ ul, ol { list-style: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   UTILITIES
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+   ══════════════════════════════════════════════════════════════════ */
+
+.cmd-dialog {
+  /* Reset browser dialog defaults */
+  border: none;
+  padding: 0;
+  background: transparent;
+  overflow: visible;
+  /* Position near the top of the viewport (Linear-style) */
+  position: fixed;
+  top: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  width: min(560px, calc(100vw - var(--s-8)));
+}
+
+.cmd-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.cmd-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--r-xl);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+.cmd-input {
+  display: block;
+  width: 100%;
+  padding: var(--s-4) var(--s-5);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+.cmd-input::placeholder { color: var(--c-dim); }
+
+.cmd-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-1) 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 9px var(--s-5);
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--c-text);
+  transition: background 0.08s;
+  user-select: none;
+}
+
+.cmd-item--active {
+  background: var(--c-accent-dim);
+  color: var(--c-text);
+}
+
+.cmd-item-label { flex: 1; }
+
+.cmd-item-shortcut {
+  font-size: 0.65rem;
+  font-family: monospace;
+  color: var(--c-dim);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.cmd-empty {
+  padding: var(--s-4) var(--s-5);
+  color: var(--c-dim);
+  font-size: 0.875rem;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SHORTCUTS OVERLAY
+   ══════════════════════════════════════════════════════════════════ */
+
+.shortcuts-dialog {
+  border: none;
+  padding: 0;
+  background: transparent;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: min(400px, calc(100vw - var(--s-8)));
+}
+
+.shortcuts-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.shortcuts-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--r-xl);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  padding: var(--s-5);
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s-5);
+}
+
+.shortcuts-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--c-text);
+  margin: 0;
+}
+
+.shortcuts-close {
+  background: none;
+  border: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.shortcuts-close:hover { background: var(--c-surface-2); color: var(--c-text); }
+
+.shortcuts-group { margin-bottom: var(--s-4); }
+.shortcuts-group:last-child { margin-bottom: 0; }
+
+.shortcuts-group-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-dim);
+  margin: 0 0 var(--s-2);
+}
+
+.shortcuts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcuts-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.shortcuts-kbd {
+  font-size: 0.68rem;
+  font-family: monospace;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--r-sm);
+  padding: 2px 7px;
+  color: var(--c-text);
+  min-width: 80px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.shortcuts-desc {
+  font-size: 0.82rem;
+  color: var(--c-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════
    RESPONSIVE — Mobile: bottom tab bar
    ══════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {

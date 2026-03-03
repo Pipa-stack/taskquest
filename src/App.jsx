@@ -17,6 +17,8 @@ import CharacterCollection from './components/CharacterCollection.jsx'
 import BoostShop from './components/BoostShop.jsx'
 import ZonesMap from './components/ZonesMap.jsx'
 import TalentTree from './components/TalentTree.jsx'
+import CommandPalette from './components/CommandPalette.jsx'
+import ShortcutsOverlay from './components/ShortcutsOverlay.jsx'
 import { todayKey } from './domain/dateKey.js'
 import { xpToLevel } from './domain/gamification.js'
 import { getAchievement } from './domain/achievements.js'
@@ -101,6 +103,8 @@ function App() {
   const [activeTab, setActiveTab]   = useState('Base')
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [paletteOpen,   setPaletteOpen]   = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const pendingOutboxCount = useLiveQuery(
     () => db.outbox.where('status').equals('pending').count(),
@@ -136,6 +140,100 @@ function App() {
     const intervalId = setInterval(tick, IDLE_TICK_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [])
+
+  // ── Command Palette actions ──────────────────────────────────────────
+  const paletteActions = useMemo(() => [
+    ...NAV_ITEMS.map((item, i) => ({
+      id:       `nav-${item.id}`,
+      label:    `Ir a ${item.label}`,
+      shortcut: `Alt+${i + 1}`,
+      onSelect: () => setActiveTab(item.id),
+    })),
+    {
+      id:       'new-task',
+      label:    'Nueva tarea',
+      shortcut: 'N',
+      onSelect: () => setActiveTab('Tasks'),
+    },
+    {
+      id:       'claim-idle',
+      label:    'Reclamar monedas idle',
+      shortcut: 'Ctrl+I',
+      onSelect: () => playerRepository.tickIdle(Date.now()).catch(console.warn),
+    },
+    {
+      id:       'sync-now',
+      label:    'Sincronizar ahora',
+      shortcut: 'Ctrl+S',
+      onSelect: () => {
+        if (!user || !supabase) return
+        pushOutbox({ supabase, userId: user.id }).catch(console.warn)
+        pullRemote({ supabase, userId: user.id }).catch(console.warn)
+        pushPlayerOutbox({ supabase, userId: user.id }).catch(console.warn)
+        pullPlayerRemote({ supabase, userId: user.id }).catch(console.warn)
+      },
+    },
+  ], [user]) // setActiveTab is a stable state setter; user is the only external dep
+
+  // ── Global keyboard shortcuts ────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e) {
+      // Ctrl+K always toggles the palette (even while typing in a form field)
+      if (e.ctrlKey && !e.metaKey && e.key === 'k') {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+        return
+      }
+
+      // Guard: skip all other shortcuts when typing in a form field
+      const active    = document.activeElement
+      const isTyping  = (
+        active?.tagName === 'INPUT'    ||
+        active?.tagName === 'TEXTAREA' ||
+        active?.isContentEditable
+      )
+      if (isTyping) return
+
+      // Alt+1…8 — navigate to each tab
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const n = parseInt(e.key, 10)
+        if (n >= 1 && n <= NAV_ITEMS.length) {
+          e.preventDefault()
+          setActiveTab(NAV_ITEMS[n - 1].id)
+          return
+        }
+      }
+
+      // Ctrl+I — claim idle coins
+      if (e.ctrlKey && !e.metaKey && e.key === 'i') {
+        e.preventDefault()
+        playerRepository.tickIdle(Date.now()).catch(console.warn)
+        return
+      }
+
+      // Ctrl+S — manual sync
+      if (e.ctrlKey && !e.metaKey && e.key === 's') {
+        e.preventDefault()
+        if (user && supabase) {
+          pushOutbox({ supabase, userId: user.id }).catch(console.warn)
+          pullRemote({ supabase, userId: user.id }).catch(console.warn)
+          pushPlayerOutbox({ supabase, userId: user.id }).catch(console.warn)
+          pullPlayerRemote({ supabase, userId: user.id }).catch(console.warn)
+        }
+        return
+      }
+
+      // ? — toggle shortcuts overlay
+      if (e.key === '?') {
+        e.preventDefault()
+        setShortcutsOpen((o) => !o)
+        return
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [user]) // paletteOpen/shortcutsOpen not needed: setters are stable
 
   const handleSelectDateKey = useCallback((dateKey) => {
     setSelectedDateKey(dateKey)
@@ -362,6 +460,17 @@ function App() {
       <Notifications
         notifications={notifications}
         onDismiss={dismissNotification}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        actions={paletteActions}
+      />
+
+      <ShortcutsOverlay
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
       />
 
     </div>
