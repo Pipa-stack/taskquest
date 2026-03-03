@@ -99,7 +99,7 @@ export default function TaskList({ tasks, onComplete }) {
                         whileTap={{ scale: 0.9 }}
                         aria-label={`Completar tarea: ${task.title}`}
                       >
-                        {inFlight ? '…' : '✓ Done'}
+                        {inFlight ? '…' : '✓ Hecha'}
                       </motion.button>
                       {burstXp && (
                         <XpBurst xp={burstXp} onDone={() => clearBurst(task.id)} />

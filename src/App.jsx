@@ -34,14 +34,29 @@ let notifIdCounter = 0
 // Sidebar navigation items
 const NAV_ITEMS = [
   { id: 'Base',      icon: '⊞', label: 'Base' },
-  { id: 'Tasks',     icon: '☑', label: 'Tasks' },
-  { id: 'Rewards',   icon: '◇', label: 'Rewards' },
-  { id: 'Stats',     icon: '▣', label: 'Stats' },
+  { id: 'Tasks',     icon: '☑', label: 'Tareas' },
+  { id: 'Rewards',   icon: '◇', label: 'Recompensas' },
+  { id: 'Stats',     icon: '▣', label: 'Estadísticas' },
   { id: 'Colección', icon: '◉', label: 'Colección' },
   { id: 'Boosts',    icon: '▲', label: 'Boosts' },
   { id: 'Mapa',      icon: '◫', label: 'Mapa' },
   { id: 'Talentos',  icon: '✦', label: 'Talentos' },
 ]
+
+/** Formats a YYYY-MM-DD dateKey as a natural Spanish date string.
+ *  Uses local-date construction to avoid UTC timezone offsets. */
+function formatDateES(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const formatted = new Intl.DateTimeFormat('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+  // Capitalize the first letter (es-ES weekday names are lowercase)
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
 
 const SYNC_INTERVAL_MS   = 15_000
 const IDLE_TICK_INTERVAL_MS = 30_000
@@ -213,7 +228,7 @@ function App() {
         <header className="top-bar">
           <span className="top-bar-page">{pageLabel}</span>
           <div className="top-bar-meta">
-            <span className="top-bar-date">{today}</span>
+            <span className="top-bar-date">{formatDateES(today)}</span>
             {isSyncing && (
               <span className="sync-indicator" title="Sincronizando con la nube…">
                 syncing…
