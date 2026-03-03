@@ -549,74 +549,50 @@ ul, ol { list-style: none; }
   gap: var(--s-4);
 }
 
-.hero-top-row {
+/* Hero production block — coins + CPM */
+.hero-production {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s-4);
+  flex-direction: column;
+  gap: var(--s-2);
 }
 
-.hero-coins-block {
+.hero-coins-group {
   display: flex;
   align-items: center;
   gap: var(--s-3);
 }
 
-.hero-coin-icon { font-size: 1.4rem; }
+.hero-coin-icon { font-size: 1.8rem; }
 
 .hero-coins {
   display: block;
-  font-size: 2.2rem;
-  font-weight: 600;
+  font-size: 2.8rem;
+  font-weight: 700;
   color: var(--c-text);
   line-height: 1;
   letter-spacing: -0.03em;
 }
 
-.hero-coins-label {
-  font-size: 0.72rem;
+.hero-cpm {
+  font-size: 0.875rem;
   color: var(--c-muted);
-  margin-top: 3px;
+  cursor: default;
+  margin: 0;
 }
 
-.hero-mini-row {
-  display: flex;
-  gap: var(--s-4);
-  align-items: flex-start;
-}
-
-.hero-mini-chip {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  align-items: flex-end;
-}
-
-.hero-mini-label {
-  font-size: 0.6rem;
-  color: var(--c-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
-.hero-mini-value {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--c-text);
-}
-
-/* Hero energy */
-.hero-energy-block { display: flex; flex-direction: column; gap: 4px; }
+/* Hero energy — more prominent */
+.hero-energy-block { display: flex; flex-direction: column; gap: 6px; }
 
 .hero-energy-label-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--c-muted);
 }
 
 .hero-energy-bar {
-  height: 6px;
+  height: 10px;
   background: var(--c-surface-2);
   border-radius: var(--r-pill);
   overflow: hidden;
@@ -662,30 +638,7 @@ ul, ol { list-style: none; }
 
 .btn-claim:disabled { cursor: not-allowed; opacity: 0.55; }
 
-/* Earn breakdown */
-.earn-breakdown {
-  display: flex;
-  align-items: center;
-  gap: var(--s-1);
-  flex-wrap: wrap;
-}
-
-.earn-factor {
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  background: var(--c-surface-2);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-pill);
-  color: var(--c-muted);
-}
-
-.earn-factor--highlight {
-  background: var(--c-accent-dim);
-  border-color: rgba(99,102,241,0.22);
-  color: #a5b4fc;
-}
-
-/* Status chips */
+/* Status grid — 2×2 layout */
 .base-status { padding: var(--s-4); }
 
 .base-status-title {
@@ -697,34 +650,39 @@ ul, ol { list-style: none; }
   margin-bottom: var(--s-3);
 }
 
-.status-chips { display: flex; flex-direction: column; gap: var(--s-2); }
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
 
-.status-chip {
+.stat-cell {
   display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-2) var(--s-3);
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--s-3);
   background: var(--c-surface-2);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
 }
 
-.status-chip--boost {
+.stat-cell--boost {
   background: var(--c-accent-dim);
-  border-color: rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.2);
 }
 
-.status-chip-icon { font-size: 1rem; width: 20px; text-align: center; }
-.status-chip-body { display: flex; flex-direction: column; gap: 1px; }
-
-.status-chip-label {
+.stat-cell-label {
   font-size: 0.62rem;
   color: var(--c-dim);
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
 
-.status-chip-value { font-size: 0.82rem; font-weight: 500; color: var(--c-text); }
+.stat-cell-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--c-text);
+}
 
 /* Quick actions */
 .base-quick { padding: var(--s-4); }
@@ -815,6 +773,12 @@ ul, ol { list-style: none; }
   background: var(--c-surface-2);
   border-radius: var(--r-pill);
   overflow: hidden;
+}
+
+/* Taller progress bar for daily goal */
+.progress-wrap--lg {
+  height: 8px;
+  margin-bottom: var(--s-3);
 }
 
 .progress-fill {

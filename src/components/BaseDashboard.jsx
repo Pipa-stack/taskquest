@@ -10,15 +10,16 @@ import db from '../db/db.js'
 import { todayKey } from '../domain/dateKey.js'
 
 const QUICK_ACTIONS = [
-  { label: 'Boosts',    icon: '🚀', tab: 'Boosts' },
-  { label: 'Colección', icon: '👥', tab: 'Colección' },
-  { label: 'Mapa',      icon: '🗺️', tab: 'Mapa' },
-  { label: 'Talentos',  icon: '🌟', tab: 'Talentos' },
-  { label: 'Stats',     icon: '📊', tab: 'Stats' },
+  { label: 'Boosts',         icon: '🚀', tab: 'Boosts' },
+  { label: 'Colección',      icon: '👥', tab: 'Colección' },
+  { label: 'Mapa',           icon: '🗺️', tab: 'Mapa' },
+  { label: 'Talentos',       icon: '🌟', tab: 'Talentos' },
+  { label: 'Estadísticas',   icon: '📊', tab: 'Stats' },
 ]
 
 /**
- * Home dashboard — hero idle stats, Reclamar CTA, status chips, quick nav, daily loop.
+ * Home dashboard — hero idle stats, Reclamar CTA, daily goal, status grid, quick nav.
+ * Hierarchy: Producción (coins + energy + claim) → Daily goal → Estado → Quick actions.
  */
 export default function BaseDashboard({ player, powerScore, onNotify, onNavigateTo }) {
   const [claimState, setClaimState] = useState(null) // null | 'claimed' | 'empty'
@@ -48,22 +49,22 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
     .filter((b) => b.coinMultiplier)
     .sort((a, b) => b.coinMultiplier - a.coinMultiplier)[0] ?? null
 
-  // Multipliers for breakdown display
-  const teamMult = calcTeamMultiplier(player.activeTeam ?? [], {}, CHARACTERS)
-  const boostMult = activeCoinBoost?.coinMultiplier ?? 1
+  // Multipliers (kept for title tooltip — not shown inline)
+  const teamMult   = calcTeamMultiplier(player.activeTeam ?? [], {}, CHARACTERS)
+  const boostMult  = activeCoinBoost?.coinMultiplier ?? 1
   const talentMult = talentBonuses.idleCoinMult ?? 1
-  const cpmBase = player.coinsPerMinuteBase ?? 1
-  const cpmTotal = cpmBase * teamMult * boostMult * talentMult
+  const cpmBase    = player.coinsPerMinuteBase ?? 1
+  const cpmTotal   = cpmBase * teamMult * boostMult * talentMult
 
   // Daily goal
-  const dailyGoal = player.dailyGoal ?? 3
+  const dailyGoal    = player.dailyGoal ?? 3
   const goalProgress = Math.min(todayDone, dailyGoal)
-  const goalPct = dailyGoal > 0 ? (goalProgress / dailyGoal) * 100 : 0
-  const goalMet = todayDone >= dailyGoal
+  const goalPct      = dailyGoal > 0 ? (goalProgress / dailyGoal) * 100 : 0
+  const goalMet      = todayDone >= dailyGoal
 
-  // Active boost remaining time
-  const activeCoinBoostDef = activeCoinBoost ? getBoost(activeCoinBoost.id) : null
-  const boostRemainingMin = activeCoinBoost
+  // Active boost display
+  const activeCoinBoostDef    = activeCoinBoost ? getBoost(activeCoinBoost.id) : null
+  const boostRemainingMin     = activeCoinBoost
     ? Math.max(0, Math.ceil((activeCoinBoost.expiresAt - nowMs) / 60_000))
     : 0
 
@@ -87,59 +88,53 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
   const claimClass = [
     'btn-claim',
     canClaim && claimState === null ? 'btn-claim--ready' : '',
-    claimState === 'claimed' ? 'btn-claim--claimed' : '',
+    claimState === 'claimed'        ? 'btn-claim--claimed' : '',
   ].filter(Boolean).join(' ')
 
   const claimLabel =
-    claimState === 'claimed' ? '✓ ¡Reclamado!' :
-    claimState === 'empty'   ? 'Nada pendiente' :
-    energy <= 0              ? 'Sin energía'    :
-    'Reclamar monedas'
+    claimState === 'claimed' ? '✓ ¡Reclamado!'   :
+    claimState === 'empty'   ? 'Nada pendiente'   :
+    energy <= 0              ? 'Sin energía'       :
+                               'Reclamar monedas'
+
+  // Breakdown tooltip: only shown on hover over CPM text
+  const cpmTooltip =
+    `Desglose: Base ${cpmBase} × Equipo ×${teamMult.toFixed(2)}` +
+    (boostMult  > 1 ? ` × Boost ×${boostMult}`              : '') +
+    (talentMult > 1 ? ` × Talento ×${talentMult.toFixed(2)}` : '')
 
   return (
     <div className="base-dashboard">
 
-      {/* ── Hero card ────────────────────────────────────────────── */}
+      {/* ── 1. HERO CARD — Producción ──────────────────────────────── */}
       <div className="base-hero-card card">
 
-        <div className="hero-top-row">
-          <div className="hero-coins-block">
-            <span className="hero-coin-icon">🪙</span>
-            <div>
-              <motion.span
-                className="hero-coins"
-                key={player.coins}
-                initial={{ scale: 1.15, opacity: 0.7 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-              >
-                {player.coins ?? 0}
-              </motion.span>
-              <span className="hero-coins-label">Monedas</span>
-            </div>
+        {/* Coins — elemento más prominente */}
+        <div className="hero-production">
+          <div className="hero-coins-group">
+            <span className="hero-coin-icon" aria-hidden="true">🪙</span>
+            <motion.span
+              className="hero-coins"
+              key={player.coins}
+              initial={{ scale: 1.15, opacity: 0.7 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+            >
+              {player.coins ?? 0}
+            </motion.span>
           </div>
 
-          <div className="hero-mini-row">
-            <div className="hero-mini-chip">
-              <span className="hero-mini-label">CPM</span>
-              <span className="hero-mini-value">{cpmTotal.toFixed(1)}</span>
-            </div>
-            <div className="hero-mini-chip">
-              <span className="hero-mini-label">Zona</span>
-              <span className="hero-mini-value">{player.currentZone ?? 1}</span>
-            </div>
-            <div className="hero-mini-chip">
-              <span className="hero-mini-label">Power</span>
-              <span className="hero-mini-value">{powerScore ?? 0}</span>
-            </div>
-          </div>
+          {/* CPM — información secundaria; el desglose va en el tooltip */}
+          <p className="hero-cpm" title={cpmTooltip}>
+            +{cpmTotal.toFixed(1)} monedas / minuto
+          </p>
         </div>
 
-        {/* Energy bar */}
+        {/* Barra de energía — más gruesa y prominente */}
         <div className="hero-energy-block">
           <div className="hero-energy-label-row">
             <span>⚡ Energía</span>
-            <span>{Math.floor(energy)}/{effectiveEnergyCap}</span>
+            <span>{Math.floor(energy)} / {effectiveEnergyCap}</span>
           </div>
           <div
             className="hero-energy-bar"
@@ -158,7 +153,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
           </div>
         </div>
 
-        {/* CTA Reclamar */}
+        {/* CTA — botón principal */}
         <button
           className={claimClass}
           onClick={handleClaim}
@@ -169,94 +164,93 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
           {claimLabel}
         </button>
 
-        {/* Earned breakdown */}
-        <div className="earn-breakdown">
-          <span className="earn-factor">Base {cpmBase}</span>
-          <span style={{ color: 'var(--c-dimmer)' }}>×</span>
-          <span className={`earn-factor ${teamMult > 1 ? 'earn-factor--highlight' : ''}`}>
-            Equipo ×{teamMult.toFixed(2)}
+      </div>
+
+      {/* ── 2. OBJETIVO DEL DÍA — antes del estado ─────────────────── */}
+      <div className="base-daily card">
+        <div className="daily-loop-header">
+          <span className="daily-loop-title">🎯 Objetivo del día</span>
+          <span className={`daily-loop-count${goalMet ? ' daily-loop-count--met' : ''}`}>
+            {goalProgress} / {dailyGoal} tareas{goalMet ? ' ✓' : ''}
           </span>
-          {boostMult > 1 && (
-            <>
-              <span style={{ color: 'var(--c-dimmer)' }}>×</span>
-              <span className="earn-factor earn-factor--highlight">
-                Boost ×{boostMult}
-              </span>
-            </>
-          )}
-          {talentMult > 1 && (
-            <>
-              <span style={{ color: 'var(--c-dimmer)' }}>×</span>
-              <span className="earn-factor">Talent ×{talentMult.toFixed(2)}</span>
-            </>
-          )}
         </div>
+
+        {/* Barra de progreso prominente */}
+        <div
+          className="progress-wrap progress-wrap--lg"
+          role="progressbar"
+          aria-valuenow={Math.round(goalPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Objetivo del día: ${goalProgress} de ${dailyGoal} tareas completadas`}
+        >
+          <motion.div
+            className={`progress-fill${goalMet ? ' progress-fill--done' : ''}`}
+            animate={{ width: `${goalPct}%` }}
+            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+            style={{ minWidth: goalPct > 0 ? 4 : 0 }}
+          />
+        </div>
+
+        {/* Chips individuales — referencia visual secundaria */}
+        <div className="daily-chips">
+          {Array.from({ length: dailyGoal }, (_, i) => (
+            <span
+              key={i}
+              className={`daily-chip${i < todayDone ? ' daily-chip--done' : ''}`}
+            >
+              {i < todayDone ? '✓' : `${i + 1}`}
+            </span>
+          ))}
+        </div>
+
+        {goalMet && (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--c-success)', fontWeight: 600 }}
+          >
+            ¡Objetivo cumplido! 🎉
+          </motion.p>
+        )}
       </div>
 
-      {/* ── Status chips ─────────────────────────────────────────── */}
+      {/* ── 3. ESTADO ACTUAL — grid 2×2 ────────────────────────────── */}
       <div className="base-status card">
-        <p className="base-status-title">Estado</p>
-        <div className="status-chips">
+        <p className="base-status-title">Estado actual</p>
+        <div className="status-grid">
 
-          {activeCoinBoost ? (
-            <div className="status-chip status-chip--boost">
-              <span className="status-chip-icon">🚀</span>
-              <div className="status-chip-body">
-                <span className="status-chip-label">Boost activo</span>
-                <span className="status-chip-value">
-                  {activeCoinBoostDef?.label ?? activeCoinBoost.id} — {boostRemainingMin}m
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="status-chip">
-              <span className="status-chip-icon">💤</span>
-              <div className="status-chip-body">
-                <span className="status-chip-label">Boost</span>
-                <span className="status-chip-value" style={{ color: 'var(--c-dim)' }}>Sin boost</span>
-              </div>
-            </div>
-          )}
-
-          <div className="status-chip">
-            <span className="status-chip-icon">📍</span>
-            <div className="status-chip-body">
-              <span className="status-chip-label">Zona actual</span>
-              <span className="status-chip-value">Zona {player.currentZone ?? 1}</span>
-            </div>
+          <div className="stat-cell">
+            <span className="stat-cell-label">Zona</span>
+            <span className="stat-cell-value">📍 Zona {player.currentZone ?? 1}</span>
           </div>
 
-          <div className="status-chip">
-            <span className="status-chip-icon">⚡</span>
-            <div className="status-chip-body">
-              <span className="status-chip-label">Power score</span>
-              <span className="status-chip-value">{powerScore ?? 0}</span>
-            </div>
+          <div className="stat-cell">
+            <span className="stat-cell-label">Power</span>
+            <span className="stat-cell-value">⚡ {powerScore ?? 0}</span>
           </div>
 
-          {teamMult > 1 && (
-            <div className="status-chip">
-              <span className="status-chip-icon">👥</span>
-              <div className="status-chip-body">
-                <span className="status-chip-label">Mult. equipo</span>
-                <span className="status-chip-value">×{teamMult.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
+          <div className="stat-cell">
+            <span className="stat-cell-label">Equipo</span>
+            <span className="stat-cell-value">
+              👥 {(player.activeTeam ?? []).length} / 3
+            </span>
+          </div>
 
-          {talentMult > 1 && (
-            <div className="status-chip">
-              <span className="status-chip-icon">🌟</span>
-              <div className="status-chip-body">
-                <span className="status-chip-label">Mult. talentos</span>
-                <span className="status-chip-value">×{talentMult.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
+          <div className={`stat-cell${activeCoinBoost ? ' stat-cell--boost' : ''}`}>
+            <span className="stat-cell-label">Boost activo</span>
+            <span className="stat-cell-value">
+              {activeCoinBoost
+                ? `🚀 ${activeCoinBoostDef?.label ?? '—'} (${boostRemainingMin}m)`
+                : <span style={{ color: 'var(--c-dim)' }}>—</span>
+              }
+            </span>
+          </div>
+
         </div>
       </div>
 
-      {/* ── Quick actions ────────────────────────────────────────── */}
+      {/* ── 4. ACCIONES RÁPIDAS ─────────────────────────────────────── */}
       <div className="base-quick card">
         <p className="base-quick-title">Acciones rápidas</p>
         <div className="quick-actions-grid">
@@ -268,54 +262,13 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
               type="button"
               aria-label={`Ir a ${label}`}
             >
-              <span className="quick-action-icon">{icon}</span>
+              <span className="quick-action-icon" aria-hidden="true">{icon}</span>
               <span>{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Daily loop ───────────────────────────────────────────── */}
-      <div className="base-daily card">
-        <div className="daily-loop-header">
-          <span className="daily-loop-title">🎯 Objetivo del día</span>
-          <span className={`daily-loop-count ${goalMet ? 'daily-loop-count--met' : ''}`}>
-            {goalProgress}/{dailyGoal} {goalMet ? '✓' : ''}
-          </span>
-        </div>
-
-        {/* Task chips */}
-        <div className="daily-chips">
-          {Array.from({ length: dailyGoal }, (_, i) => (
-            <span
-              key={i}
-              className={`daily-chip ${i < todayDone ? 'daily-chip--done' : ''}`}
-            >
-              {i < todayDone ? '✓' : `${i + 1}`}
-            </span>
-          ))}
-        </div>
-
-        {/* Progress bar */}
-        <div className="progress-wrap">
-          <motion.div
-            className={`progress-fill ${goalMet ? 'progress-fill--done' : ''}`}
-            animate={{ width: `${goalPct}%` }}
-            transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-            style={{ minWidth: goalPct > 0 ? 4 : 0 }}
-          />
-        </div>
-
-        {goalMet && (
-          <motion.p
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--c-green)', fontWeight: 600 }}
-          >
-            ¡Objetivo cumplido! 🎉
-          </motion.p>
-        )}
-      </div>
     </div>
   )
 }
