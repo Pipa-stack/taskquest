@@ -215,8 +215,9 @@ function App() {
           <div className="top-bar-meta">
             <span className="top-bar-date">{today}</span>
             {isSyncing && (
-              <span className="sync-indicator" title="Sincronizando con la nube…">
-                syncing…
+              <span className="sync-indicator" title="Sincronizando con la nube…" aria-live="polite">
+                <span className="sync-spinner" aria-hidden="true">↻</span>
+                Sincronizando…
               </span>
             )}
           </div>

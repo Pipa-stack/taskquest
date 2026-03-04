@@ -76,7 +76,14 @@ function TalentCard({ branch, talents, essence, onUpgrade }) {
       </div>
 
       {/* Progress bar */}
-      <div className="talent-card__progress-track">
+      <div
+        className="talent-card__progress-track"
+        role="progressbar"
+        aria-valuenow={currentPoints}
+        aria-valuemin={0}
+        aria-valuemax={TALENT_MAX}
+        aria-label={`${meta.label}: nivel ${currentPoints} de ${TALENT_MAX}`}
+      >
         <motion.div
           className="talent-card__progress-fill"
           animate={{ width: `${progressPct}%` }}

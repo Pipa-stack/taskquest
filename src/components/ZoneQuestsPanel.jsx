@@ -47,7 +47,14 @@ export default function ZoneQuestsPanel({ zoneId, player, tasksCompleted = 0, on
                 <span className="zone-quest-reward">+{quest.reward.coins} 🪙</span>
               </div>
 
-              <div className="zone-quest-progress-wrap">
+              <div
+                className="zone-quest-progress-wrap"
+                role="progressbar"
+                aria-valuenow={progress.current}
+                aria-valuemin={0}
+                aria-valuemax={progress.target}
+                aria-label={`${quest.label}: ${progress.current} de ${progress.target}`}
+              >
                 <motion.div
                   className="zone-quest-progress-bar"
                   animate={{ width: `${pct}%` }}
@@ -63,6 +70,7 @@ export default function ZoneQuestsPanel({ zoneId, player, tasksCompleted = 0, on
                   className="zone-quest-claim-btn"
                   onClick={() => handleClaim(quest)}
                   type="button"
+                  aria-label={`Reclamar recompensa: ${quest.label}`}
                 >
                   Reclamar
                 </button>

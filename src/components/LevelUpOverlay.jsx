@@ -18,12 +18,13 @@ export default function LevelUpOverlay({ visible, level, onDone }) {
       {visible && (
         <motion.div
           className="level-up-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="levelup-title"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
-          aria-live="assertive"
-          aria-atomic="true"
         >
           <motion.div
             className="level-up-content"
@@ -32,8 +33,8 @@ export default function LevelUpOverlay({ visible, level, onDone }) {
             exit={{ scale: 1.1, y: -10, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 20 }}
           >
-            <span className="level-up-label">LEVEL UP!</span>
-            <span className="level-up-number">Nivel {level}</span>
+            <span className="level-up-label" aria-hidden="true">LEVEL UP!</span>
+            <span className="level-up-number" id="levelup-title">Nivel {level}</span>
           </motion.div>
         </motion.div>
       )}
