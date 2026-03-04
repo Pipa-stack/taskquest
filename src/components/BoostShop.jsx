@@ -50,7 +50,7 @@ export default function BoostShop({ coins, boosts, onNotify }) {
                 )}
               </div>
               <button
-                className="boost-buy-btn"
+                className="btn btn-secondary btn-sm boost-buy-btn"
                 onClick={() => handleBuy(boost)}
                 disabled={!canAfford}
                 title={canAfford ? `Comprar: ${boost.cost} monedas` : 'Monedas insuficientes'}

@@ -259,6 +259,116 @@ ul, ol { list-style: none; }
   .spin { animation: none; }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   UNIFIED BUTTON SYSTEM
+   Base: .btn  |  Variants: .btn-primary .btn-secondary .btn-ghost
+                              .btn-danger .btn-success
+   Sizes:   .btn-sm  .btn-md (default)  .btn-lg
+   Special: .btn-icon (square icon-only)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Base ──────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Variants ──────────────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: var(--c-accent-hover);
+  border-color: var(--c-accent-hover);
+  box-shadow: 0 1px 6px rgba(99,102,241,0.25);
+}
+
+.btn-primary:not(:disabled):active { filter: brightness(0.92); }
+
+.btn-secondary {
+  background: var(--c-surface-2);
+  border-color: var(--c-border);
+  color: var(--c-text);
+}
+
+.btn-secondary:not(:disabled):hover {
+  border-color: var(--c-border-2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+.btn-secondary:not(:disabled):active { filter: brightness(0.92); }
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--c-muted);
+}
+
+.btn-ghost:not(:disabled):hover {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+}
+
+.btn-ghost:not(:disabled):active { opacity: 0.75; }
+
+.btn-danger {
+  background: var(--c-danger-dim);
+  border-color: rgba(239,68,68,0.22);
+  color: var(--c-danger);
+}
+
+.btn-danger:not(:disabled):hover { background: rgba(239,68,68,0.22); }
+
+.btn-success {
+  background: var(--c-success-dim);
+  border-color: rgba(16,185,129,0.22);
+  color: var(--c-success);
+}
+
+.btn-success:not(:disabled):hover { background: rgba(16,185,129,0.22); }
+
+/* Sizes ─────────────────────────────────────────────────────────── */
+.btn-sm { padding: 4px var(--s-3); font-size: 0.72rem; }
+.btn-lg { padding: var(--s-3) var(--s-5); font-size: 0.9rem; }
+
+/* Icon-only (square) ────────────────────────────────────────────── */
+.btn-icon {
+  padding: var(--s-2);
+  width: 32px;
+  height: 32px;
+}
+
+/* Prefers-reduced-motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+}
+
 /* ── Main content area ───────────────────────────────────────────── */
 .main-content {
   flex: 1;
@@ -600,7 +710,7 @@ ul, ol { list-style: none; }
   box-shadow: 0 1px 6px rgba(99,102,241,0.3);
 }
 
-.btn-claim--ready:hover {
+.btn-claim--ready:not(:disabled):hover {
   background: var(--c-accent-hover);
   border-color: var(--c-accent-hover);
 }
@@ -693,10 +803,9 @@ ul, ol { list-style: none; }
   transition: border-color 0.12s, color 0.12s, transform 0.12s;
 }
 
-.quick-action-btn:hover {
+.quick-action-btn:not(:disabled):hover {
   border-color: var(--c-border-2);
   color: var(--c-text);
-  transform: translateY(-2px);
 }
 
 .quick-action-icon { font-size: 1.1rem; }
@@ -969,7 +1078,7 @@ ul, ol { list-style: none; }
   transition: background 0.12s;
 }
 
-.btn-complete:hover    { background: rgba(16,185,129,0.18); }
+.btn-complete:not(:disabled):hover { background: rgba(16,185,129,0.18); }
 .btn-complete:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .done-marker {
@@ -1406,7 +1515,7 @@ ul, ol { list-style: none; }
   white-space: nowrap;
 }
 
-.boost-buy-btn:hover    { border-color: var(--c-accent); color: #a5b4fc; }
+.boost-buy-btn:not(:disabled):hover { border-color: var(--c-accent); color: #a5b4fc; }
 .boost-buy-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ══════════════════════════════════════════════════════════════════

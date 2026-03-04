@@ -92,7 +92,7 @@ export default function TaskList({ tasks, onComplete }) {
 
                     <div className="task-actions">
                       <motion.button
-                        className="btn-complete"
+                        className="btn btn-success btn-sm btn-complete"
                         onClick={() => handleComplete(task.id)}
                         disabled={inFlight}
                         whileHover={{ scale: 1.06 }}

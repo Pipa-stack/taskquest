@@ -155,7 +155,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
 
         {/* CTA — botón principal */}
         <button
-          className={claimClass}
+          className={`btn ${claimClass}`}
           onClick={handleClaim}
           disabled={energy <= 0 || !!claimState}
           type="button"
@@ -257,7 +257,7 @@ export default function BaseDashboard({ player, powerScore, onNotify, onNavigate
           {QUICK_ACTIONS.map(({ label, icon, tab }) => (
             <button
               key={tab}
-              className="quick-action-btn"
+              className="btn btn-secondary quick-action-btn"
               onClick={() => onNavigateTo?.(tab)}
               type="button"
               aria-label={`Ir a ${label}`}
